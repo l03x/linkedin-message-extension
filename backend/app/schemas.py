@@ -135,3 +135,14 @@ class CVImportOut(BaseModel):
     method: str
     ocr_pages: int
     warnings: list[str]
+
+
+class ModelSettings(BaseModel):
+    model: str
+    effort: str  # "" = no effort field is sent
+    efforts: list[str]
+    from_env: bool  # true until the effort is changed in the dashboard
+
+
+class ModelSettingsIn(BaseModel):
+    effort: str = ""

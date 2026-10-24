@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import SENT_STATUSES, Generation, PromptVersion, Profile, UserContextVersion, utcnow
+from app.llm import EFFORTS
+from app.models import SENT_STATUSES, AppSetting, Generation, PromptVersion, Profile, UserContextVersion, utcnow
 
 CONTEXT_FIELDS = ("background", "target_role", "target_stack", "availability", "location", "notes")
 
@@ -96,6 +97,28 @@ def render_context(ctx: UserContextVersion | None) -> str:
     }
     parts = [f"{labels[k]}: {getattr(ctx, k)}" for k in CONTEXT_FIELDS if getattr(ctx, k)]
     return "\n".join(parts) or "(no context provided)"
+
+
+# --- settings ------------------------------------------------------------------
+
+EFFORT_KEY = "llm_effort"
+
+
+def get_effort(db: Session) -> str | None:
+    """The effort picked in the dashboard: "" means don't send one, None means never set (use LLM_EFFORT)."""
+    row = db.get(AppSetting, EFFORT_KEY)
+    return row.value if row else None
+
+
+def set_effort(db: Session, effort: str) -> None:
+    if effort and effort not in EFFORTS:
+        raise ValueError(f"Unknown effort '{effort}'. Use one of: {', '.join(EFFORTS)}, or empty.")
+    row = db.get(AppSetting, EFFORT_KEY)
+    if row is None:
+        db.add(AppSetting(key=EFFORT_KEY, value=effort))
+    else:
+        row.value = effort
+    db.commit()
 
 
 # --- profiles ------------------------------------------------------------------

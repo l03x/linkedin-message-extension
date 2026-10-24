@@ -43,6 +43,16 @@ class UserContextVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class AppSetting(Base):
+    """Settings edited in the dashboard, one row per key. A missing row means "use the .env value"."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class Profile(Base):
     __tablename__ = "profiles"
 

@@ -95,7 +95,7 @@ machine, outside this compose project:
 LLM_BASE_URL=http://host.docker.internal:8000/v1
 LLM_API_KEY=chk_...        # a token created in claude-headless-api's dashboard
 LLM_MODEL=sonnet           # or haiku / opus; GET /v1/models lists what your token may use
-LLM_EFFORT=low             # non-standard field that API understands; leave empty for other providers
+LLM_EFFORT=low             # starting effort; change it later on the Prompts page. Empty for other providers
 ```
 
 How it fits together:
@@ -121,6 +121,8 @@ OS setting.
   - Edit the system prompt. Saving always creates a new version, and old versions are never modified.
   - Exactly one version is active. You can activate any version, or start editing from any version.
   - Diff any two versions.
+  - Pick the model's **effort** (low, medium, high, xhigh, max, or not sent). It applies from the next
+    draft or CV import, with no restart. Until you pick one, `LLM_EFFORT` from `.env` is used.
 - **My context:** your background and targets: role, stack, dates, location and notes. Each save is a new
   timestamped version. The "What the model sees" preview scrolls on its own when the context is long.
   - **Fill from your CV:** drop a PDF, DOCX, TXT or image (PNG/JPG, e.g. a phone photo) on the import card.
@@ -259,5 +261,10 @@ docker compose cp backend:/data/app.db ./app-backup.db
   editor and context preview, and Noto Sans Arabic for Arabic drafts, all SIL OFL. They live in
   `backend/app/static/fonts/` and `extension/fonts/`, so nothing leaves your machine and the extension needs
   no extra permissions. `unicode-range` means the Arabic font is downloaded only when Arabic text is on screen.
+- **Effort is a dashboard setting; the model stays in `.env`.** Effort is the knob you tune while
+  iterating on prompts (quality against wait time), so it lives in the database next to them and changes
+  without a restart. `LLM_EFFORT` is only the starting value. The model name is tied to the API key's
+  allow-list, so it stays with the rest of the connection settings. The effort isn't recorded per draft:
+  that would mean a schema migration, and the tool has none.
 - **No automatic follow-ups or reminders.** That would drift toward automation, and you decide when to
   write again.

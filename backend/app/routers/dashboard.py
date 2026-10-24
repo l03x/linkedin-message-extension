@@ -13,7 +13,7 @@ from app import stats, store
 from app.auth import COOKIE_NAME, cookie_value, require_dashboard, token_matches
 from app.config import Settings
 from app.deps import get_db, get_llm, get_settings
-from app.llm import ChatClient
+from app.llm import EFFORTS, ChatClient
 from app.modes import LANGUAGES, MODES
 from app.models import SENT_STATUSES, STATUSES, Generation, utcnow
 from app.routers.api import history_filters, run_cv_import
@@ -119,11 +119,34 @@ def _versions_ctx(db: Session) -> dict:
     return {"versions": store.list_prompts(db), "usage": _prompt_usage(db)}
 
 
+def _model_ctx(db: Session, settings: Settings) -> dict:
+    effort = store.get_effort(db)
+    return {
+        "model": settings.llm_model,
+        "efforts": EFFORTS,
+        "effort": settings.llm_effort.strip() if effort is None else effort,
+        "from_env": effort is None,
+    }
+
+
 @router.get("/prompts", dependencies=auth)
-def prompts_page(request: Request, edit: int | None = None, db: Session = Depends(get_db)):
+def prompts_page(
+    request: Request, edit: int | None = None, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+):
     active = store.active_prompt(db)
     base = store.get_prompt(db, edit) if edit else active
-    return _render(request, "prompts.html", active=active, base=base, **_versions_ctx(db))
+    return _render(request, "prompts.html", active=active, base=base, **_versions_ctx(db), **_model_ctx(db, settings))
+
+
+@router.post("/settings/effort", dependencies=auth)
+def settings_effort(
+    request: Request, effort: str = Form(""), db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+):
+    try:
+        store.set_effort(db, effort.strip())
+    except ValueError as e:
+        return Response(str(e), status_code=400)
+    return _render(request, "_model_settings.html", saved=True, **_model_ctx(db, settings))
 
 
 @router.post("/prompts", dependencies=auth)
@@ -203,11 +226,12 @@ def context_save(
 @router.post("/context/import", dependencies=auth, response_model=CVImportOut)
 def context_import(
     file: UploadFile = File(...),
+    db: Session = Depends(get_db),
     llm: ChatClient = Depends(get_llm),
     settings: Settings = Depends(get_settings),
 ):
     # Same as POST /api/context/import, behind the dashboard cookie. Returns JSON; the page fills the form.
-    return run_cv_import(file, llm, settings)
+    return run_cv_import(file, db, llm, settings)
 
 
 # --- history -------------------------------------------------------------------------------

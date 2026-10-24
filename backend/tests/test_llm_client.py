@@ -41,8 +41,13 @@ def test_effort_is_sent_only_when_configured():
         bodies.append(json.loads(request.content))
         return _ok()
 
-    _client(handler, llm_effort="low").complete([{"role": "user", "content": "u"}])
+    client = _client(handler, llm_effort="low")
+    client.complete([{"role": "user", "content": "u"}])
     assert bodies[0]["effort"] == "low"
+    # A per-call effort (picked in the dashboard) wins; "" means send none.
+    client.complete([{"role": "user", "content": "u"}], effort="max")
+    client.complete([{"role": "user", "content": "u"}], effort="")
+    assert bodies[1]["effort"] == "max" and "effort" not in bodies[2]
 
 
 @pytest.mark.parametrize(

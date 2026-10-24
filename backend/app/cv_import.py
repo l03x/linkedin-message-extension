@@ -251,17 +251,17 @@ def parse_fields(raw: str) -> dict[str, str]:
     return fields
 
 
-def structure(llm: ChatClient, cv_text: str) -> dict[str, str]:
+def structure(llm: ChatClient, cv_text: str, effort: str | None = None) -> dict[str, str]:
     messages = [
         {"role": "system", "content": STRUCTURE_PROMPT},
         {"role": "user", "content": f"<cv>\n{cv_text}\n</cv>"},
     ]
-    return parse_fields(llm.complete(messages))
+    return parse_fields(llm.complete(messages, effort))
 
 
-def import_cv(llm: ChatClient, data: bytes, filename: str, ocr_langs: str) -> ImportResult:
+def import_cv(llm: ChatClient, data: bytes, filename: str, ocr_langs: str, effort: str | None = None) -> ImportResult:
     extracted = extract_text(data, filename, ocr_langs)
-    fields = structure(llm, extracted.text)
+    fields = structure(llm, extracted.text, effort)
     if not fields["background"]:
         extracted.warnings.append("The model found no background in this text. Is it really a CV?")
     return ImportResult(fields=fields, extracted=extracted)

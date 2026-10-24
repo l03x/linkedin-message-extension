@@ -10,7 +10,7 @@ from app.auth import require_bearer
 from app.config import Settings
 from app.deps import get_db, get_llm, get_settings
 from app.generation import GenerationError, ProfileInput, generate
-from app.llm import ChatClient
+from app.llm import EFFORTS, ChatClient
 from app.modes import MODES, options_payload
 from app.schemas import (
     ContextIn,
@@ -19,6 +19,8 @@ from app.schemas import (
     GenerateRequest,
     GenerateResponse,
     GenerationOut,
+    ModelSettings,
+    ModelSettingsIn,
     PreviousContact,
     PromptCreate,
     PromptOut,
@@ -42,6 +44,26 @@ def health() -> dict:
 @router.get("/me")
 def me(settings: Settings = Depends(get_settings)) -> dict:
     return {"ok": True, "model": settings.llm_model}
+
+
+@router.get("/settings", response_model=ModelSettings)
+def get_model_settings(db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    effort = store.get_effort(db)
+    return ModelSettings(
+        model=settings.llm_model,
+        effort=settings.llm_effort.strip() if effort is None else effort,
+        efforts=list(EFFORTS),
+        from_env=effort is None,
+    )
+
+
+@router.put("/settings", response_model=ModelSettings)
+def put_model_settings(body: ModelSettingsIn, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    try:
+        store.set_effort(db, body.effort.strip())
+    except ValueError as e:
+        raise _error(422, "bad_effort", str(e)) from e
+    return get_model_settings(db, settings)
 
 
 @router.get("/options")
@@ -206,17 +228,18 @@ def context_versions(db: Session = Depends(get_db)):
 @router.post("/context/import", response_model=CVImportOut)
 def import_context_from_cv(
     file: UploadFile = File(...),
+    db: Session = Depends(get_db),
     llm: ChatClient = Depends(get_llm),
     settings: Settings = Depends(get_settings),
 ):
     """Extract a CV's text (OCR for scans) and let the LLM propose context fields. Saves nothing."""
-    return run_cv_import(file, llm, settings)
+    return run_cv_import(file, db, llm, settings)
 
 
-def run_cv_import(file: UploadFile, llm: ChatClient, settings: Settings) -> CVImportOut:
+def run_cv_import(file: UploadFile, db: Session, llm: ChatClient, settings: Settings) -> CVImportOut:
     # Read one byte past the limit so an oversized upload is detected without reading all of it.
     data = file.file.read(MAX_UPLOAD_BYTES + 1)
-    result = import_cv(llm, data, file.filename or "", settings.ocr_langs)
+    result = import_cv(llm, data, file.filename or "", settings.ocr_langs, store.get_effort(db))
     ex = result.extracted
     return CVImportOut(
         fields=ContextIn(**result.fields), text=ex.text, method=ex.method, ocr_pages=ex.ocr_pages, warnings=ex.warnings

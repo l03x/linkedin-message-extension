@@ -118,7 +118,7 @@ def test_llm_error_is_reported_clearly(client, app):
     class Down:
         model = "x"
 
-        def complete(self, messages):
+        def complete(self, messages, effort=None):
             raise LLMError(502, "llm_unreachable", "Can't reach the LLM API at http://nowhere/v1")
 
     app.state.llm = Down()

@@ -1,0 +1,21 @@
+{% from "_icons.html" import icon %}
+<div class="card-head">
+  <div>
+    <h2>Model</h2>
+    <p>Used for every draft and CV import. Model <code>{{ model }}</code> is set in <code>.env</code>.</p>
+  </div>
+</div>
+<form class="card-body" hx-post="/settings/effort" hx-target="#model-settings" hx-trigger="change">
+  <div class="field">
+    <label for="effort">Effort</label>
+    <select id="effort" name="effort">
+      <option value="" {{ 'selected' if not effort }}>Not sent (the API's default)</option>
+      {% for e in efforts %}<option value="{{ e }}" {{ 'selected' if e == effort }}>{{ e }}</option>{% endfor %}
+    </select>
+    <span class="hint">
+      {% if saved %}<span class="saved">{{ icon("check") }} Saved. The next draft uses it.</span>
+      {% elif from_env %}From <code>LLM_EFFORT</code> in <code>.env</code> until you change it here.
+      {% else %}Higher effort thinks longer: better drafts, slower answers.{% endif %}
+    </span>
+  </div>
+</form>

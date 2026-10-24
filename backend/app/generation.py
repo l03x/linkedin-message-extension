@@ -173,6 +173,7 @@ def generate(
             .order_by(Generation.sent_at.desc())
         )
     )
+    effort = store.get_effort(db)
     # Commit before the (slow) LLM call so SQLite's write lock isn't held while we wait.
     db.commit()
 
@@ -180,13 +181,13 @@ def generate(
         {"role": "system", "content": prompt.system_prompt},
         {"role": "user", "content": build_task(profile_in, store.render_context(ctx), mode, language, extra_instruction)},
     ]
-    raw = llm.complete(messages)
+    raw = llm.complete(messages, effort)
     draft = parse(raw, mode, language)
     attempts = 1
     over = draft.over(mode)
     if over:
         messages += [{"role": "assistant", "content": raw}, {"role": "user", "content": shorten_request(over, mode)}]
-        raw = llm.complete(messages)
+        raw = llm.complete(messages, effort)
         draft = parse(raw, mode, language)
         attempts = 2
         over = draft.over(mode)

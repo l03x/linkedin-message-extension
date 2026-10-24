@@ -12,17 +12,20 @@ class FakeLLM:
     """Replays queued replies and records every message list it was sent."""
 
     model = "fake-model"
+    effort = ""
 
     def __init__(self):
         self.replies: list[str] = []
         self.calls: list[list[dict]] = []
+        self.efforts: list[str | None] = []
 
     def queue(self, *replies: str) -> "FakeLLM":
         self.replies.extend(replies)
         return self
 
-    def complete(self, messages: list[dict]) -> str:
+    def complete(self, messages: list[dict], effort: str | None = None) -> str:
         self.calls.append([dict(m) for m in messages])
+        self.efforts.append(effort)
         if not self.replies:
             raise AssertionError("FakeLLM: no reply queued")
         return self.replies.pop(0)

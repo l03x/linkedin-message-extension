@@ -7,6 +7,10 @@ import httpx
 from app.config import Settings
 
 
+# Values claude-headless-api accepts for its non-standard "effort" field, lowest first.
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
+
 class LLMError(Exception):
     """A failure the API reports to the extension as {"detail": {"code", "message"}}."""
 
@@ -19,8 +23,9 @@ class LLMError(Exception):
 
 class ChatClient(Protocol):
     model: str
+    effort: str
 
-    def complete(self, messages: list[dict]) -> str: ...
+    def complete(self, messages: list[dict], effort: str | None = None) -> str: ...
 
 
 def _upstream_message(resp: httpx.Response) -> str:
@@ -53,10 +58,12 @@ class LLMClient:
             transport=transport,
         )
 
-    def complete(self, messages: list[dict]) -> str:
+    def complete(self, messages: list[dict], effort: str | None = None) -> str:
+        """`effort` overrides LLM_EFFORT for this call; "" sends none."""
+        effort = self.effort if effort is None else effort
         payload: dict = {"model": self.model, "messages": messages}
-        if self.effort:
-            payload["effort"] = self.effort
+        if effort:
+            payload["effort"] = effort
         try:
             resp = self._client.post("/chat/completions", json=payload)
         except httpx.ConnectError as e:
