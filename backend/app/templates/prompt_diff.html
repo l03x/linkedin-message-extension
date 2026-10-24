@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Diff{% endblock %}
+{% block content %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Compare prompt versions</h1>
+    <p><a href="/prompts">← Back to prompts</a></p>
+  </div>
+</div>
+<form class="card" method="get" action="/prompts/diff">
+  <div class="card-body diff-pick">
+    <div class="field">
+      <label for="a">Old</label>
+      <select id="a" name="a" onchange="this.form.submit()">
+        {% for v in versions %}<option value="{{ v.id }}" {{ 'selected' if v.id == a.id }}>#{{ v.id }} {{ v.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="b">New</label>
+      <select id="b" name="b" onchange="this.form.submit()">
+        {% for v in versions %}<option value="{{ v.id }}" {{ 'selected' if v.id == b.id }}>#{{ v.id }} {{ v.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <noscript><button type="submit">Diff</button></noscript>
+  </div>
+</form>
+<div class="card">
+  <div class="card-head">
+    <h2>#{{ a.id }} {{ a.name }} → #{{ b.id }} {{ b.name }}</h2>
+    <span class="muted small">{{ lines|selectattr(0, 'equalto', 'add')|list|length }} added · {{ lines|selectattr(0, 'equalto', 'del')|list|length }} removed</span>
+  </div>
+  {% if lines %}
+  <div class="diff">{% for kind, line in lines if kind != 'file' %}<div class="{{ kind }}">{{ line }}</div>{% endfor %}</div>
+  {% else %}
+  <div class="empty"><h2>Identical</h2><p>These two versions have the same text.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

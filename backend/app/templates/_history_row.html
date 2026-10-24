@@ -1,0 +1,75 @@
+{% from "_icons.html" import icon %}
+{% set sent = g.status != 'drafted' %}
+{% set lang = LANGUAGES.get(g.language) %}
+{% set subject = g.final_subject if sent else g.draft_subject %}
+<tr id="gen-{{ g.id }}">
+  <td>
+    <div class="person">
+      <span class="avatar" aria-hidden="true">{{ (g.profile.name or '?')|initials }}</span>
+      <div>
+        <a href="{{ g.profile.linkedin_url }}" target="_blank" rel="noopener noreferrer">{{ g.profile.name or g.profile.linkedin_url }}{{ icon("external") }}</a>
+        {% if g.profile.headline %}<div class="headline">{{ g.profile.headline }}</div>{% endif %}
+      </div>
+    </div>
+  </td>
+  <td>
+    <div class="msg clamp" {% if lang and lang.rtl %}dir="rtl"{% else %}dir="auto"{% endif %} title="Click to expand">
+      {%- if subject %}<div class="subject">{{ subject }}</div>{% endif -%}
+      <div class="msg-text">{{ g.final_text if sent and g.final_text else g.draft_text }}</div>
+    </div>
+    {% if g.over_limit or g.extra_instruction %}
+    <div class="msg-meta">
+      {% if g.over_limit %}<span class="badge warn">{{ icon("alert") }} Draft was over the limit</span>{% endif %}
+      {% if g.extra_instruction %}<span class="muted small">Extra: {{ g.extra_instruction }}</span>{% endif %}
+    </div>
+    {% endif %}
+  </td>
+  <td>
+    <div class="meta-col">
+      <span class="when" title="{{ 'Sent' if sent else 'Generated' }}">{{ local(g.sent_at or g.generated_at, '%d %b %Y, %H:%M') }}</span>
+      <span style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="chip" title="{{ MODES[g.mode].label if g.mode in MODES else g.mode }}">{{ MODES[g.mode].short_label if g.mode in MODES else g.mode }}</span>
+        <span class="chip" title="{{ lang.label if lang else g.language }}">{{ g.language|upper }}</span>
+      </span>
+      <span class="muted small">Prompt #{{ g.prompt_version_id }} · {{ g.prompt_version.name }}</span>
+    </div>
+  </td>
+  <td>
+    <div class="status-cell">
+      <div style="text-align:right">
+        <span class="badge {{ g.status }}"><span class="dot"></span>{{ STATUS_LABELS[g.status] }}</span>
+        {% if g.replied_at %}<div class="muted small" style="margin-top:4px">{{ local(g.replied_at, '%d %b') }}{% if g.sent_at %} · after {{ (g.replied_at - g.sent_at)|duration }}{% endif %}</div>{% endif %}
+      </div>
+      {% if sent %}
+      <details class="menu">
+        <summary class="btn ghost sm icon-only" title="Update status">{{ icon("chevron") }}<span class="sr-only">Update status</span></summary>
+        <div class="menu-pop">
+          <form hx-post="/history/{{ g.id }}/status" hx-target="#gen-{{ g.id }}" hx-swap="outerHTML">
+            <input type="hidden" name="status" value="replied">
+            <input type="hidden" name="replied_on" value="{{ today }}">
+            <button class="menu-item" type="submit">{{ icon("check") }} Replied today</button>
+          </form>
+          <form class="menu-date" hx-post="/history/{{ g.id }}/status" hx-target="#gen-{{ g.id }}" hx-swap="outerHTML">
+            <input type="hidden" name="status" value="replied">
+            <input type="date" name="replied_on" value="{{ local(g.replied_at, '%Y-%m-%d') if g.replied_at else today }}" max="{{ today }}" min="{{ local(g.sent_at, '%Y-%m-%d') }}" aria-label="Reply date">
+            <button class="sm" type="submit">Set</button>
+          </form>
+          <div class="menu-sep"></div>
+          {% if g.status != 'no_reply' %}
+          <form hx-post="/history/{{ g.id }}/status" hx-target="#gen-{{ g.id }}" hx-swap="outerHTML">
+            <input type="hidden" name="status" value="no_reply">
+            <button class="menu-item" type="submit">{{ icon("x") }} No reply</button>
+          </form>
+          {% endif %}
+          {% if g.status != 'sent' %}
+          <form hx-post="/history/{{ g.id }}/status" hx-target="#gen-{{ g.id }}" hx-swap="outerHTML">
+            <input type="hidden" name="status" value="sent">
+            <button class="menu-item" type="submit">{{ icon("clock") }} Back to awaiting reply</button>
+          </form>
+          {% endif %}
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </td>
+</tr>

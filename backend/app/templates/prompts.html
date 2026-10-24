@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Prompts{% endblock %}
+{% block content %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Prompts</h1>
+    <p>The system prompt sets the voice and rules. Every save is a new version; old versions never change.</p>
+  </div>
+</div>
+
+<div class="grid2">
+  <form class="card" method="post" action="/prompts">
+    <div class="card-head">
+      <div>
+        <h2>Edit system prompt</h2>
+        <p>Starting from #{{ base.id }} {{ base.name }}{% if base.id != active.id %} · not the active version{% endif %}</p>
+      </div>
+      {% if base.id != active.id %}<a class="btn ghost sm" href="/prompts">Edit the active version</a>{% endif %}
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label for="name">Version name</label>
+        <input id="name" name="name" type="text" placeholder="e.g. v{{ versions|length + 1 }} – shorter hooks" maxlength="200">
+      </div>
+      <div class="field">
+        <label for="system_prompt">System prompt</label>
+        <textarea id="system_prompt" name="system_prompt" class="prompt" spellcheck="false" required>{{ base.system_prompt }}</textarea>
+        <span class="hint" id="promptStats"></span>
+      </div>
+      <div class="editor-foot">
+        <label class="check"><input type="checkbox" name="activate" value="true" checked> Make it the active version</label>
+        <button class="primary" type="submit">Save as new version</button>
+      </div>
+      <div class="notice" style="background:var(--surface-2);color:var(--text-2);margin:16px 0 0">
+        {{ icon("info") }}
+        <span>The backend appends a fixed task block to every request: your context, their profile, the mode and its ask, the language, the character limits and the output format. You don't need to repeat those here.</span>
+      </div>
+    </div>
+  </form>
+
+  <div class="stack">
+    <div class="card" id="versions">
+      {% include "_prompt_versions.html" %}
+    </div>
+    {% if versions|length > 1 %}
+    <form class="card" method="get" action="/prompts/diff">
+      <div class="card-head"><h2>Compare versions</h2></div>
+      <div class="card-body diff-pick">
+        <div class="field">
+          <label for="a">Old</label>
+          <select id="a" name="a">
+            {% for v in versions %}<option value="{{ v.id }}" {{ 'selected' if loop.index == 2 }}>#{{ v.id }} {{ v.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="b">New</label>
+          <select id="b" name="b">
+            {% for v in versions %}<option value="{{ v.id }}" {{ 'selected' if loop.first }}>#{{ v.id }} {{ v.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <button type="submit">{{ icon("diff") }} Diff</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+<script>
+  const ta = document.getElementById("system_prompt");
+  const stats = () => {
+    const t = ta.value;
+    document.getElementById("promptStats").textContent = `${t.split("\n").length} lines · ${[...t].length} characters`;
+  };
+  ta.addEventListener("input", stats);
+  stats();
+</script>
+{% endblock %}

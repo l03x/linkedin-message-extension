@@ -1,0 +1,39 @@
+{%- from "_icons.html" import icon, theme_switch -%}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Outreach{% endblock %} · Outreach assistant</title>
+  <script src="/static/theme.js?v={{ asset_v }}"></script>
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/htmx.min.js" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% if active_page == "login" %}
+  {% block bare %}{% endblock %}
+  {% else %}
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="/history"><span class="logo">{{ icon("logo") }}</span><span>Outreach</span></a>
+      <nav class="nav">
+        <a href="/history" class="{{ 'active' if active_page == 'history' }}">History</a>
+        <a href="/stats" class="{{ 'active' if active_page == 'stats' }}">Stats</a>
+        <a href="/prompts" class="{{ 'active' if active_page in ('prompts', 'prompt_diff') }}">Prompts</a>
+        <a href="/context" class="{{ 'active' if active_page == 'context' }}">My context</a>
+      </nav>
+      <div class="topbar-right">
+        {{ theme_switch() }}
+        <form method="post" action="/logout">
+          <button class="ghost icon-only" type="submit" title="Log out">{{ icon("logout") }}<span class="sr-only">Log out</span></button>
+        </form>
+      </div>
+    </div>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  {% endif %}
+</body>
+</html>

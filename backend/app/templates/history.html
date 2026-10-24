@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block content %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>History</h1>
+    <p>Messages you marked as sent. Record replies here to feed the stats.</p>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" action="/history" class="toolbar" id="filters">
+    <select name="mode" aria-label="Mode">
+      <option value="">All modes</option>
+      {% for k, m in MODES.items() %}<option value="{{ k }}" {{ 'selected' if filters.mode == k }}>{{ m.label }}</option>{% endfor %}
+    </select>
+    <select name="language" aria-label="Language">
+      <option value="">All languages</option>
+      {% for k, l in LANGUAGES.items() %}<option value="{{ k }}" {{ 'selected' if filters.language == k }}>{{ l.label }}</option>{% endfor %}
+    </select>
+    <select name="status" aria-label="Status">
+      <option value="">Any status</option>
+      {% for s in STATUSES %}<option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ STATUS_LABELS[s] }}</option>{% endfor %}
+    </select>
+    <select name="prompt_version_id" aria-label="Prompt version">
+      <option value="">All prompt versions</option>
+      {% for v in versions %}<option value="{{ v.id }}" {{ 'selected' if filters.prompt_version_id == v.id|string }}>#{{ v.id }} {{ v.name }}</option>{% endfor %}
+    </select>
+    <span class="range">
+      <input name="date_from" type="date" value="{{ filters.date_from }}" aria-label="From date">
+      <span>–</span>
+      <input name="date_to" type="date" value="{{ filters.date_to }}" aria-label="To date">
+    </span>
+    <label class="check small"><input type="checkbox" name="drafts" value="true" {{ 'checked' if filters.drafts }}> Include unsent drafts</label>
+    <span class="spacer"></span>
+    <noscript><button type="submit" class="sm">Apply</button></noscript>
+    {% if filters.values()|select|list %}<a href="/history" class="btn ghost sm">{{ icon("x") }} Clear filters</a>{% endif %}
+  </form>
+
+  {% if rows %}
+  <div class="result-count">{{ rows|length }} message{{ 's' if rows|length != 1 }}{% if rows|length >= 500 %} · showing the latest 500{% endif %} · click a message to expand it</div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Person</th><th>Message</th><th>Details</th><th style="text-align:right">Status</th></tr>
+      </thead>
+      <tbody>
+        {% for g in rows %}{% include "_history_row.html" %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <h2>{{ 'No matches' if filters.values()|select|list else 'Nothing sent yet' }}</h2>
+    <p>{% if filters.values()|select|list %}No messages match these filters.{% else %}Messages appear here once you click <strong>Mark as sent</strong> in the extension.{% endif %}</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  // Filters apply as soon as they change.
+  document.getElementById("filters").addEventListener("change", (e) => e.currentTarget.requestSubmit());
+  document.addEventListener("click", (e) => {
+    const m = e.target.closest(".msg");
+    if (m && !window.getSelection().toString()) m.classList.toggle("clamp");
+    // Close any open status menu when clicking elsewhere.
+    document.querySelectorAll("details.menu[open]").forEach((d) => { if (!d.contains(e.target)) d.open = false; });
+  });
+</script>
+{% endblock %}

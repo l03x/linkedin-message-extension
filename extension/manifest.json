@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Outreach assistant (personal)",
+  "version": "1.0.0",
+  "description": "Drafts a LinkedIn message from the profile you're viewing, on demand. Never sends or clicks anything.",
+  "minimum_chrome_version": "116",
+  "permissions": ["sidePanel", "scripting", "storage", "clipboardWrite"],
+  "host_permissions": ["https://www.linkedin.com/in/*"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": {
+    "default_title": "Open outreach assistant",
+    "default_icon": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+  },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+}

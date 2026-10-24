@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block bare %}
+{% from "_icons.html" import icon, theme_switch %}
+<div class="theme-corner">{{ theme_switch() }}</div>
+<div class="login-wrap">
+  <div class="login">
+    <div class="card card-body" style="padding:28px">
+      <span class="logo">{{ icon("logo") }}</span>
+      <h1>Outreach assistant</h1>
+      <p class="muted">Log in with the <code>APP_TOKEN</code> from your <code>.env</code>.</p>
+      {% if error %}<div class="notice bad" style="margin:16px 0 0">{{ icon("alert") }}<span>{{ error }}</span></div>{% endif %}
+      <form method="post" action="/login" style="margin-top:20px">
+        <div class="field">
+          <label for="token">Token</label>
+          <input id="token" name="token" type="password" autocomplete="current-password" autofocus required>
+        </div>
+        <button class="primary" type="submit" style="width:100%;margin-top:16px">Log in</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

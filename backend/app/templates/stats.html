@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}Stats{% endblock %}
+{% block head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+{% endblock %}
+{% block content %}
+{% from "_icons.html" import icon %}
+{% macro pct(x) %}{{ '—' if x is none else ('%.0f%%' % (x * 100)) }}{% endmacro %}
+{% macro rate_table(rows) %}
+<div class="table-scroll">
+<table class="rate-table">
+  <thead><tr><th></th><th class="num">Sent</th><th class="num">Replied</th><th class="num">No reply</th><th class="num">Awaiting</th><th class="num">Rate</th><th class="num">95% range</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.label }}{% if r.small_sample %} <span class="badge warn" title="Fewer than 10 sent: not reliable yet">small n</span>{% endif %}</td>
+      <td class="num">{{ r.n }}</td>
+      <td class="num">{{ r.replied }}</td>
+      <td class="num">{{ r.no_reply }}</td>
+      <td class="num">{{ r.awaiting }}</td>
+      <td class="num"><strong>{{ pct(r.rate) }}</strong></td>
+      <td class="num muted">{{ pct(r.ci_low) }}–{{ pct(r.ci_high) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+{% set t = data.totals %}
+{% set ttr = data.time_to_reply %}
+
+<div class="page-head">
+  <div>
+    <h1>Stats</h1>
+    <p>Counts only messages you marked as sent. Times in {{ timezone }}.</p>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="card kpi">
+    <div class="label">Messages sent</div>
+    <div class="value">{{ t.sent }}</div>
+    <div class="sub">{{ t.awaiting }} awaiting reply · {{ t.drafted }} unsent draft{{ 's' if t.drafted != 1 }}</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">Reply rate</div>
+    <div class="value">{{ pct(t.reply_rate) }}</div>
+    <div class="sub">{{ t.replied }} replied · {{ t.no_reply }} no reply</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">Last 7 days</div>
+    <div class="value">{{ data.last_7_days.count }}</div>
+    <div class="sub">{{ data.last_7_days.per_day }} per day</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">Median time to reply</div>
+    <div class="value">{% if ttr.median_hours is none %}—{% elif ttr.median_hours < 48 %}{{ '%.0f' % ttr.median_hours }} h{% else %}{{ '%.1f' % (ttr.median_hours / 24) }} d{% endif %}</div>
+    <div class="sub">from {{ ttr.n }} repl{{ 'y' if ttr.n == 1 else 'ies' }}</div>
+  </div>
+</div>
+
+{% if t.sent == 0 %}
+<div class="notice warn">{{ icon("info") }}<span>No sent messages yet. Stats fill in once you click <strong>Mark as sent</strong> in the extension.</span></div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Messages sent</h2>
+      <p id="sentRange">Per day, last 60 days</p>
+    </div>
+    <div class="seg" role="group" aria-label="Granularity">
+      <button type="button" data-gran="daily" aria-pressed="true">Day</button>
+      <button type="button" data-gran="weekly" aria-pressed="false">Week</button>
+    </div>
+  </div>
+  <div class="card-body"><div class="chart-box"><canvas id="sentChart" aria-label="Messages sent over time, by mode"></canvas></div></div>
+</div>
+
+<div class="grid-half wide-content">
+  <div class="card">
+    <div class="card-head"><div><h2>Reply rate by prompt version</h2><p>Faded bars: fewer than 10 sent</p></div></div>
+    {% if data.by_prompt %}
+    <div class="card-body"><div class="chart-box" style="height:{{ 60 + 40 * data.by_prompt|length }}px"><canvas id="promptChart"></canvas></div></div>
+    {{ rate_table(data.by_prompt) }}
+    {% else %}<div class="empty">No sent messages yet.</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-head"><div><h2>Reply rate by mode</h2><p>Faded bars: fewer than 10 sent</p></div></div>
+    {% if data.by_mode %}
+    <div class="card-body"><div class="chart-box" style="height:{{ 60 + 40 * data.by_mode|length }}px"><canvas id="modeChart"></canvas></div></div>
+    {{ rate_table(data.by_mode) }}
+    {% else %}<div class="empty">No sent messages yet.</div>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div><h2>Time to reply</h2><p>{% if ttr.enough %}{{ ttr.n }} replies{% else %}Shown once there are at least 5 replies{% endif %}</p></div>
+  </div>
+  {% if ttr.enough %}
+  <div class="card-body"><div class="chart-box" style="height:220px"><canvas id="ttrChart"></canvas></div></div>
+  {% else %}
+  <div class="empty">Not enough data yet (n={{ ttr.n }}).</div>
+  {% endif %}
+</div>
+<p class="legend-note">Reply rate = replied ÷ all sent, including messages still awaiting a reply. The 95% range is a Wilson score interval: with few messages it is wide, so small differences between versions mean little.</p>
+
+<script>
+  window.STATS = {{ data|tojson }};
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const S = window.STATS;
+  const modeKeys = S.mode_order; // tojson sorts object keys, so keep the order explicitly
+  const pct = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  let gran = "daily";
+  let charts = [];
+
+  // Colors come from the theme tokens, so charts are redrawn whenever the theme changes.
+  function draw() {
+    charts.forEach((c) => c.destroy());
+    charts = [];
+    const root = getComputedStyle(document.documentElement);
+    const css = (v) => root.getPropertyValue(v).trim();
+    const series = (i) => css(`--series-${(i % 3) + 1}`);
+    Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+    Chart.defaults.font.size = 12;
+    Chart.defaults.color = css("--text-2");
+    const grid = { color: css("--grid") };
+    const ticks = { color: css("--axis") };
+    const tooltip = {
+      backgroundColor: css("--surface"), titleColor: css("--text"), bodyColor: css("--text-2"), footerColor: css("--text"),
+      borderColor: css("--border-strong"), borderWidth: 1, padding: 10, cornerRadius: 8, boxPadding: 4,
+    };
+
+    // Sent per day / week: stacked bars, one segment per mode.
+    charts.push(new Chart(document.getElementById("sentChart"), {
+      type: "bar",
+      data: {
+        labels: S[gran].labels,
+        datasets: modeKeys.map((k, i) => ({
+          label: S.mode_labels[k],
+          data: S[gran].series[k] || [],
+          backgroundColor: series(i),
+          borderColor: css("--surface"),
+          borderWidth: { top: 2 },
+          borderSkipped: "bottom",
+          borderRadius: 3,
+          maxBarThickness: gran === "daily" ? 14 : 36,
+        })),
+      },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "top", align: "end", labels: { boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 2 } },
+          tooltip: {
+            ...tooltip,
+            filter: (item) => item.raw > 0,
+            callbacks: { footer: (items) => `Total: ${items.reduce((a, i) => a + i.raw, 0)}` },
+          },
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, border: { color: css("--border-strong") },
+               ticks: { ...ticks, maxTicksLimit: 9, maxRotation: 0,
+                        callback(v) { const d = new Date(this.getLabelForValue(v)); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }); } } },
+          y: { stacked: true, beginAtZero: true, grid, border: { display: false }, ticks: { ...ticks, precision: 0 } },
+        },
+      },
+    }));
+
+    // Reply-rate bars: one series; faded when the sample is small.
+    const rateChart = (id, rows) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const base = series(0);
+      charts.push(new Chart(el, {
+        type: "bar",
+        data: {
+          labels: rows.map((r) => `${r.label}  (n=${r.n})`),
+          datasets: [{
+            label: "Reply rate",
+            data: rows.map((r) => r.rate ?? 0),
+            backgroundColor: rows.map((r) => (r.small_sample ? base + "55" : base)),
+            borderRadius: 4,
+            borderSkipped: "start",
+            maxBarThickness: 20,
+          }],
+        },
+        options: {
+          indexAxis: "y",
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              ...tooltip,
+              callbacks: {
+                label: (c) => {
+                  const r = rows[c.dataIndex];
+                  return [`${pct(r.rate)} replied (${r.replied} of ${r.n})`, `95% range ${pct(r.ci_low)}–${pct(r.ci_high)}`,
+                          ...(r.small_sample ? ["Small sample: not reliable yet"] : [])];
+                },
+              },
+            },
+          },
+          scales: {
+            x: { min: 0, max: 1, grid, border: { display: false }, ticks: { ...ticks, callback: (v) => pct(v), maxTicksLimit: 6 } },
+            y: { grid: { display: false }, border: { color: css("--border-strong") }, ticks: { color: css("--text-2") } },
+          },
+        },
+      }));
+    };
+    rateChart("promptChart", S.by_prompt);
+    rateChart("modeChart", S.by_mode);
+
+    const ttrEl = document.getElementById("ttrChart");
+    if (ttrEl) {
+      charts.push(new Chart(ttrEl, {
+        type: "bar",
+        data: {
+          labels: S.time_to_reply.labels,
+          datasets: [{ label: "Replies", data: S.time_to_reply.counts, backgroundColor: series(0), borderRadius: 4, borderSkipped: "start", maxBarThickness: 56 }],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip },
+          scales: {
+            x: { grid: { display: false }, border: { color: css("--border-strong") }, ticks },
+            y: { beginAtZero: true, grid, border: { display: false }, ticks: { ...ticks, precision: 0 } },
+          },
+        },
+      }));
+    }
+  }
+
+  document.querySelectorAll("[data-gran]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      gran = btn.dataset.gran;
+      document.querySelectorAll("[data-gran]").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+      document.getElementById("sentRange").textContent = gran === "daily" ? "Per day, last 60 days" : "Per week, last 16 weeks";
+      draw();
+    })
+  );
+  document.addEventListener("themechange", draw);
+  draw();
+});
+</script>
+{% endblock %}

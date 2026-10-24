@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}My context{% endblock %}
+{% block content %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>My context</h1>
+    <p>Who you are and what you're looking for. Sent with every generation.</p>
+  </div>
+</div>
+{% if saved %}<div class="notice ok">{{ icon("check") }}<span>Saved as a new version.</span></div>{% endif %}
+{% if ctx and ctx.is_placeholder %}
+<div class="notice warn">{{ icon("alert") }}<span>Not filled in yet. Until you save your real background, drafts will be generic.</span></div>
+{% endif %}
+{% set real = ctx if ctx and not ctx.is_placeholder else None %}
+{% set hint = ctx if ctx and ctx.is_placeholder else None %}
+<div class="grid2">
+  <form class="card" method="post" action="/context">
+    <div class="card-head">
+      <div>
+        <h2>Background and targets</h2>
+        <p>Only write what's true: the model is told never to invent facts about you.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label for="background">Background</label>
+        <span class="hint">Studies, projects (one line each: what it does, stack), courses, anything a hook could connect to.</span>
+        <textarea id="background" name="background" placeholder="{{ hint.background if hint }}" rows="11">{{ real.background if real }}</textarea>
+      </div>
+      <div class="field-grid">
+        <div class="field">
+          <label for="target_role">Target role</label>
+          <input id="target_role" name="target_role" placeholder="{{ hint.target_role if hint }}" type="text" value="{{ real.target_role if real }}">
+        </div>
+        <div class="field">
+          <label for="target_stack">Stack</label>
+          <input id="target_stack" name="target_stack" placeholder="{{ hint.target_stack if hint }}" type="text" value="{{ real.target_stack if real }}">
+        </div>
+        <div class="field">
+          <label for="availability">Availability / dates</label>
+          <input id="availability" name="availability" placeholder="{{ hint.availability if hint }}" type="text" value="{{ real.availability if real }}">
+        </div>
+        <div class="field">
+          <label for="location">Location</label>
+          <input id="location" name="location" placeholder="{{ hint.location if hint }}" type="text" value="{{ real.location if real }}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="notes">Notes</label>
+        <span class="hint">Your first name for the sign-off, and anything to always keep in mind.</span>
+        <textarea id="notes" name="notes" placeholder="{{ hint.notes if hint }}" rows="3">{{ real.notes if real }}</textarea>
+      </div>
+      <div class="editor-foot">
+        <span class="muted small">{% if ctx %}Last saved {{ local(ctx.created_at, '%d %b %Y, %H:%M') }} · {{ count }} version{{ 's' if count != 1 }}{% endif %}</span>
+        <button class="primary" type="submit">Save</button>
+      </div>
+    </div>
+  </form>
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>What the model sees</h2>
+        <p>Inserted as &lt;my_context&gt; in every request.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="preview" id="preview">{{ preview }}</div>
+    </div>
+  </div>
+</div>
+<script>
+  const labels = { background: "Background", target_role: "Target role", target_stack: "Stack",
+                   availability: "Availability / dates", location: "Location", notes: "Notes" };
+  const form = document.querySelector("form.card");
+  const render = () => {
+    const lines = Object.entries(labels)
+      .map(([k, label]) => [label, form.elements[k].value.trim()])
+      .filter(([, v]) => v)
+      .map(([label, v]) => `${label}: ${v}`);
+    document.getElementById("preview").textContent = lines.join("\n") || "(no context provided)";
+  };
+  form.addEventListener("input", render);
+  {% if real %}render();{% endif %}
+</script>
+{% endblock %}

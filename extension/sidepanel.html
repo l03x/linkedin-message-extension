@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Outreach assistant</title>
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="profile" id="profile">
+    <div class="avatar" id="avatar" aria-hidden="true">?</div>
+    <div class="who">
+      <div class="name" id="targetName">Checking the current tab…</div>
+      <div class="slug" id="targetSub"></div>
+    </div>
+    <button class="icon-btn" id="themeBtn" type="button" title="Theme"></button>
+  </header>
+
+  <section class="card" id="compose">
+    <div class="group">
+      <div class="label" id="modeLabel">Message type</div>
+      <div class="seg" id="modeSeg" role="radiogroup" aria-labelledby="modeLabel"></div>
+      <div class="hint" id="modeHint"></div>
+    </div>
+    <div class="group">
+      <div class="label" id="langLabel">Language</div>
+      <div class="seg" id="langSeg" role="radiogroup" aria-labelledby="langLabel"></div>
+    </div>
+    <div class="group">
+      <label class="label" for="extra">Extra instruction <span class="optional">optional</span></label>
+      <textarea id="extra" rows="2" maxlength="1000" placeholder="e.g. mention I saw their talk at DevFest Rabat"></textarea>
+    </div>
+    <button id="generate" class="primary wide" type="button" disabled>
+      <span class="spinner" hidden></span><span class="btn-label">Generate draft</span>
+    </button>
+    <div id="status" class="status" hidden></div>
+  </section>
+
+  <section class="card" id="draftSection" hidden>
+    <div class="draft-head">
+      <div>
+        <div class="title">Draft</div>
+        <div class="sub" id="draftFor"></div>
+      </div>
+      <span class="badge" id="draftBadge" hidden></span>
+    </div>
+    <div id="notices"></div>
+
+    <div class="field" id="subjectWrap" hidden>
+      <div class="field-head">
+        <label class="label" for="subject">Subject</label>
+        <button class="link-btn" id="copySubject" type="button">Copy</button>
+      </div>
+      <input id="subject" type="text" dir="auto">
+      <div class="meter"><div class="meter-bar" id="subjectBar"></div></div>
+      <div class="counter" id="subjectCount"></div>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label class="label" for="body">Message</label>
+      </div>
+      <textarea id="body" rows="10" dir="auto"></textarea>
+      <div class="meter"><div class="meter-bar" id="bodyBar"></div></div>
+      <div class="counter" id="bodyCount"></div>
+    </div>
+
+    <div class="buttons">
+      <button id="regenerate" type="button" title="Write a new draft from the same profile">Regenerate</button>
+      <button id="copy" class="primary" type="button">Copy message</button>
+    </div>
+    <button id="markSent" class="wide outline" type="button">Mark as sent</button>
+    <div id="draftStatus" class="status" hidden></div>
+    <p class="footnote">Paste it into LinkedIn and send it yourself. This extension never sends anything.</p>
+  </section>
+
+  <details class="card settings" id="settings">
+    <summary>Settings</summary>
+    <div class="group">
+      <label class="label" for="backendUrl">Backend URL</label>
+      <input id="backendUrl" type="url" placeholder="http://localhost:8765">
+    </div>
+    <div class="group">
+      <label class="label" for="token">Token</label>
+      <input id="token" type="password" autocomplete="off" placeholder="APP_TOKEN from your .env">
+    </div>
+    <div class="group">
+      <div class="label" id="themeLabel">Theme</div>
+      <div class="seg" id="themeSeg" role="radiogroup" aria-labelledby="themeLabel">
+        <button type="button" data-theme-choice="light">Light</button>
+        <button type="button" data-theme-choice="system">System</button>
+        <button type="button" data-theme-choice="dark">Dark</button>
+      </div>
+    </div>
+    <div class="buttons">
+      <button id="testConnection" type="button">Test connection</button>
+      <button id="saveSettings" class="primary" type="button">Save</button>
+    </div>
+    <div id="settingsStatus" class="status" hidden></div>
+  </details>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

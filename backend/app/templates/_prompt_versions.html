@@ -1,0 +1,22 @@
+<div class="card-head">
+  <div>
+    <h2>Versions</h2>
+    <p>{{ versions|length }} saved · drafts / sent / replied</p>
+  </div>
+</div>
+<ul class="versions">
+  {% for v in versions %}
+  {% set u = usage.get(v.id, {"drafts": 0, "sent": 0, "replied": 0}) %}
+  <li class="{{ 'is-active' if v.is_active }}">
+    <div class="v-main">
+      <a class="v-name" href="/prompts?edit={{ v.id }}" title="Edit starting from this version">#{{ v.id }} {{ v.name }}</a>
+      <span class="v-sub">{{ local(v.created_at, '%d %b %Y, %H:%M') }} · {{ u.drafts }} / {{ u.sent }} / {{ u.replied }}{% if u.sent %} · {{ '%.0f' % (100 * u.replied / u.sent) }}% replied{% endif %}</span>
+    </div>
+    {% if v.is_active %}
+    <span class="badge active"><span class="dot"></span>Active</span>
+    {% else %}
+    <button class="sm" hx-post="/prompts/{{ v.id }}/activate" hx-target="#versions">Activate</button>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
