@@ -23,7 +23,9 @@
       <a class="brand" href="/history"><span class="logo">{{ icon("logo") }}</span><span>Outreach</span></a>
       <nav class="nav">
         <a href="/history" class="{{ 'active' if active_page == 'history' }}">History</a>
+        <a href="/people" class="{{ 'active' if active_page == 'people' }}">People</a>
         <a href="/stats" class="{{ 'active' if active_page == 'stats' }}">Stats</a>
+        <a href="/companies" class="{{ 'active' if active_page in ('companies', 'company') }}">Companies</a>
         <a href="/prompts" class="{{ 'active' if active_page in ('prompts', 'prompt_diff') }}">Prompts</a>
         <a href="/context" class="{{ 'active' if active_page == 'context' }}">My context</a>
       </nav>

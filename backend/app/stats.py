@@ -10,10 +10,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modes import MODES
-from app.models import SENT_STATUSES, STATUSES, Generation, PromptVersion, utcnow
+from app.models import SENT_STATUSES, STATUSES, STRATEGIES, Generation, PromptVersion, utcnow
 
 MIN_REPLIES_FOR_DISTRIBUTION = 5
 SMALL_SAMPLE = 10
+
+STRATEGY_LABELS = {"hook_only": "Hook only", "send_cv": "Send CV", "ask_referral": "Ask for a referral"}
 
 REPLY_BUCKETS = [  # (label, upper bound in hours, exclusive)
     ("< 1 day", 24),
@@ -33,6 +35,9 @@ class SentRow:
     status: str
     sent_at: datetime
     replied_at: datetime | None
+    strategy: str | None = None
+    # None for drafts made before the generation contract (no strategy, no research step).
+    research_used: bool | None = None
 
 
 def sent_rows(db: Session) -> list[SentRow]:
@@ -45,6 +50,8 @@ def sent_rows(db: Session) -> list[SentRow]:
             Generation.status,
             Generation.sent_at,
             Generation.replied_at,
+            Generation.strategy,
+            Generation.research_used,
         )
         .join(PromptVersion, PromptVersion.id == Generation.prompt_version_id)
         .where(Generation.status.in_(SENT_STATUSES), Generation.sent_at.is_not(None))
@@ -151,6 +158,29 @@ def reply_rate_by_mode(rows: list[SentRow]) -> list[dict]:
     return out
 
 
+def contract_rows(rows: list[SentRow]) -> list[SentRow]:
+    """Messages drafted under the generation contract: the only ones with a strategy and a research step."""
+    return [r for r in rows if r.research_used is not None]
+
+
+def reply_rate_by_strategy(rows: list[SentRow]) -> list[dict]:
+    out = []
+    for key in (*STRATEGIES, None):
+        group = [r for r in rows if r.strategy == key]
+        if group:
+            out.append({**_rate_entry(STRATEGY_LABELS.get(key, "Unknown strategy"), group), "strategy": key})
+    return out
+
+
+def reply_rate_by_research(rows: list[SentRow]) -> list[dict]:
+    out = []
+    for used, label in ((True, "With company research"), (False, "Without research")):
+        group = [r for r in rows if r.research_used is used]
+        if group:
+            out.append({**_rate_entry(label, group), "research_used": used})
+    return out
+
+
 def time_to_reply(rows: list[SentRow]) -> dict:
     hours = [
         (r.replied_at - r.sent_at).total_seconds() / 3600
@@ -175,6 +205,7 @@ def time_to_reply(rows: list[SentRow]) -> dict:
 def compute(db: Session, tz: ZoneInfo, now: datetime | None = None) -> dict:
     now = now or utcnow()
     rows = sent_rows(db)
+    contract = contract_rows(rows)
     return {
         "totals": totals(db, rows),
         "last_7_days": last_7_days(rows, now),
@@ -182,6 +213,9 @@ def compute(db: Session, tz: ZoneInfo, now: datetime | None = None) -> dict:
         "weekly": weekly_series(rows, tz, now),
         "by_prompt": reply_rate_by_prompt(rows),
         "by_mode": reply_rate_by_mode(rows),
+        "by_strategy": reply_rate_by_strategy(contract),
+        "by_research": reply_rate_by_research(contract),
+        "pre_contract": len(rows) - len(contract),
         "time_to_reply": time_to_reply(rows),
         "mode_labels": {k: m.label for k, m in MODES.items()},
         "mode_order": list(MODES),

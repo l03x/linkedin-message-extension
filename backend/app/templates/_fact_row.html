@@ -1,0 +1,11 @@
+{% from "_icons.html" import icon %}
+{# One editable fact. Needs `f` with category, fact, source_url, date. #}
+<div class="fact-row">
+  <select name="category" aria-label="Category">
+    {% for cat in FACT_CATEGORIES %}<option value="{{ cat }}" {{ 'selected' if f.category == cat }}>{{ cat }}</option>{% endfor %}
+  </select>
+  <textarea name="fact" rows="2" aria-label="Fact" placeholder="One specific, checkable fact">{{ f.fact }}</textarea>
+  <input name="source_url" type="url" aria-label="Source URL" placeholder="Source URL (required)" value="{{ f.source_url }}">
+  <input name="date" type="text" aria-label="Date" placeholder="Date (optional)" value="{{ f.date or '' }}" maxlength="40">
+  <button class="ghost sm icon-only" type="button" data-remove title="Remove this fact">{{ icon("x") }}<span class="sr-only">Remove</span></button>
+</div>

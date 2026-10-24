@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models import PromptVersion
 from app.seed import DEFAULT_SYSTEM_PROMPT
-from tests.conftest import AUTH, gen_body
+from tests.conftest import AUTH, draft_json, gen_body
 
 
 def _active_ids(db) -> list[int]:
@@ -66,9 +66,9 @@ def test_db_refuses_two_active_versions(db):
 
 def test_generation_uses_and_records_active_version(client, llm, db):
     v2 = client.post("/api/prompts", json={"name": "v2", "system_prompt": "SYSTEM V2"}, headers=AUTH).json()
-    llm.queue("hello")
+    llm.queue(draft_json("hello"))
     data = client.post("/api/generate", json=gen_body(), headers=AUTH).json()
-    assert llm.calls[0][0]["content"] == "SYSTEM V2"
+    assert llm.draft_calls[0][0]["content"] == "SYSTEM V2"
     assert data["prompt_version"] == {"id": v2["id"], "name": "v2"}
 
 

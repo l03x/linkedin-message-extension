@@ -140,3 +140,42 @@ def test_compute_and_stats_page(dash, db, seeded):
 def test_stats_page_empty(dash):
     page = dash.get("/stats")
     assert page.status_code == 200 and "No sent messages yet" in page.text
+
+
+def test_reply_rate_by_strategy_and_research(db, seeded):
+    v1, _ = seeded
+    p = db.query(Profile).one()
+
+    def add(strategy, research_used, status):
+        db.add(
+            Generation(
+                profile_id=p.id, mode="message", language="en", prompt_version_id=v1.id, draft_text="d", final_text="f",
+                status=status, generated_at=NOW, sent_at=NOW - timedelta(days=1),
+                replied_at=NOW if status == "replied" else None, strategy=strategy, research_used=research_used,
+            )
+        )  # fmt: skip
+
+    add("hook_only", True, "replied")
+    add("hook_only", False, "no_reply")
+    add("send_cv", True, "replied")
+    add("send_cv", True, "sent")
+    add("ask_referral", False, "no_reply")
+    add(None, True, "replied")  # the model returned an unknown strategy
+    db.commit()
+
+    data = stats.compute(db, UTC, NOW)
+    by_strategy = {r["label"]: (r["n"], r["replied"]) for r in data["by_strategy"]}
+    assert by_strategy == {"Hook only": (2, 1), "Send CV": (2, 1), "Ask for a referral": (1, 0), "Unknown strategy": (1, 1)}
+    by_research = {r["label"]: (r["n"], r["replied"], r["rate"]) for r in data["by_research"]}
+    assert by_research == {"With company research": (4, 3, 0.75), "Without research": (2, 0, 0.0)}
+    # Every entry carries its sample size and interval, and small samples are flagged.
+    assert all({"n", "ci_low", "ci_high", "small_sample"} <= r.keys() and r["small_sample"] for r in data["by_research"])
+    # The seven older messages have neither and are left out (and counted).
+    assert data["pre_contract"] == 7
+
+
+def test_stats_page_shows_strategy_and_research(dash, db, seeded):
+    r = dash.get("/stats")
+    assert r.status_code == 200
+    assert "Reply rate by strategy" in r.text and "With vs without company research" in r.text
+    assert "7 sent messages from before strategies and research" in r.text

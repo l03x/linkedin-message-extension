@@ -34,7 +34,7 @@
       </div>
       <div class="notice" style="background:var(--surface-2);color:var(--text-2);margin:16px 0 0">
         {{ icon("info") }}
-        <span>The backend appends a fixed task block to every request: your context, their profile, the mode and its ask, the language, the character limits and the output format. You don't need to repeat those here.</span>
+        <span>Every request's user message is fixed: <code>&lt;mode&gt;</code>, <code>&lt;language&gt;</code>, <code>&lt;extra_instruction&gt;</code>, <code>&lt;my_context&gt;</code>, <code>&lt;target_profile&gt;</code> and <code>&lt;company_research&gt;</code> (sourced facts, or <code>none</code>). This prompt must explain the modes, limits and strategies, and ask for the JSON reply: <code>strategy</code>, <code>strategy_reason</code>, <code>cv_match</code>, <code>subject</code>, <code>message</code>, <code>facts_used</code>. Character limits are still enforced by the backend.</span>
       </div>
     </div>
   </form>

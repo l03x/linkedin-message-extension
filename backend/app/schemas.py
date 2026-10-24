@@ -17,11 +17,20 @@ def canonical_profile_url(url: str) -> str:
     return f"https://www.linkedin.com/in/{unquote(m.group(1)).lower()}/"
 
 
+class CompanyHint(BaseModel):
+    """The current company as the extension read it on the profile page."""
+
+    name: str = Field("", max_length=300)
+    # From a linkedin.com/company/<slug>/ link on the page: a cache key, never fetched.
+    linkedin_slug: str | None = Field(None, max_length=200)
+
+
 class ProfilePayload(BaseModel):
     url: str
     name: str = Field("", max_length=300)
     headline: str = Field("", max_length=1000)
     raw_text: str = ""
+    company: CompanyHint | None = None
 
     @field_validator("url")
     @classmethod
@@ -39,6 +48,72 @@ class GenerateRequest(BaseModel):
     mode: str
     language: str = "en"
     extra_instruction: str = Field("", max_length=1000)
+    # Typed in the panel when the detected company is wrong.
+    company_override: str = Field("", max_length=300)
+
+
+class ResearchRequest(BaseModel):
+    profile: ProfilePayload
+    company_override: str = Field("", max_length=300)
+    # Search again even if the cache is fresh or a failure is backing off (never overwrites your manual edits).
+    force: bool = False
+
+
+class CompanyFact(BaseModel):
+    category: str
+    fact: str
+    source_url: str
+    date: str | None = None
+
+
+class CompanyOut(BaseModel):
+    id: int
+    name: str
+    website: str | None
+    linkedin_slug: str | None
+    status: str
+    facts: list[CompanyFact]
+    researched_at: datetime | None
+    age_days: int | None  # since the last research (or your edit)
+    fresh: bool
+    manually_edited: bool
+    edited_at: datetime | None
+    last_error: str | None
+    next_retry_at: datetime | None
+    web_searches: int | None
+    rejected_facts: int
+
+
+class ResearchResponse(BaseModel):
+    company: CompanyOut | None
+    used: bool  # whether drafts get it in <company_research>
+    researched: bool  # a web search ran for this request
+    error: str | None
+    notice: str | None
+
+
+class CompanyFactIn(BaseModel):
+    category: str = "domain"
+    fact: str = ""
+    source_url: str = ""
+    date: str | None = None
+
+
+class CompanyEdit(BaseModel):
+    website: str | None = None
+    facts: list[CompanyFactIn]
+
+
+class CompanyRefresh(BaseModel):
+    # Required to replace research you edited by hand.
+    discard_edits: bool = False
+
+
+class FactUsed(BaseModel):
+    fact: str
+    source: str
+    kind: Literal["url", "profile", "my_context", "invalid"]
+    verified: bool
 
 
 class PreviousContact(BaseModel):
@@ -61,6 +136,13 @@ class GenerateResponse(BaseModel):
     prompt_version: dict
     warnings: list[str]
     previous: list[PreviousContact]
+    strategy: str | None
+    strategy_reason: str
+    cv_match: str
+    facts_used: list[FactUsed]
+    company: CompanyOut | None
+    research_used: bool
+    research_note: str | None
 
 
 class SentRequest(BaseModel):
@@ -90,6 +172,12 @@ class GenerationOut(BaseModel):
     final_text: str | None
     over_limit: bool
     attempts: int
+    strategy: str | None
+    strategy_reason: str | None
+    cv_match: str | None
+    facts_used: list[FactUsed] | None
+    company_id: int | None
+    research_used: bool | None
     status: str
     generated_at: datetime
     sent_at: datetime | None

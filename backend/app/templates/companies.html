@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Companies{% endblock %}
+{% block content %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Companies</h1>
+    <p>Web research about each recipient's company, cached and shared by everyone you write to there. Every fact has a source.</p>
+  </div>
+  {% if rows|selectattr("facts")|list %}
+  <div class="actions">
+    <button class="ghost sm" type="button" id="toggleAll" aria-pressed="false">Show all research</button>
+  </div>
+  {% endif %}
+</div>
+{% if saved %}<div class="notice ok">{{ icon("check") }}<span>Saved. The new expiry applies from the next draft.</span></div>{% endif %}
+
+<div class="card">
+  <form class="card-body ttl-form" method="post" action="/settings/research-ttl">
+    <div class="field">
+      <label for="days">Research expires after</label>
+      <span class="ttl-row">
+        <input id="days" name="days" type="number" min="1" max="3650" value="{{ ttl_days }}" required>
+        <span>days</span>
+        <button class="sm" type="submit">Save</button>
+      </span>
+      <span class="hint">After that it is searched again on the next draft. Research you edited never expires. <code>RESEARCH_TTL_DAYS</code> in <code>.env</code> is {{ ttl_env }}.</span>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  {% if rows %}
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Company</th><th>Research</th><th class="num">Facts</th><th>Age</th><th class="num">Drafts · sent</th><th></th></tr></thead>
+      <tbody>
+        {% for c in rows %}
+        {% set u = usage.get(c.id, {"drafts": 0, "sent": 0}) %}
+        <tr class="company-row">
+          <td>
+            <a href="/companies/{{ c.id }}"><strong>{{ c.name }}</strong></a>
+            {% if c.website %}<div class="muted small">{{ c.website }}</div>{% endif %}
+          </td>
+          <td>
+            {% include "_research_badge.html" %}
+            {% if c.status == "failed" and c.last_error %}<div class="muted small clamp-2" title="{{ c.last_error }}">{{ c.last_error }}</div>{% endif %}
+            {% if c.status == "failed" and c.next_retry_at %}<div class="muted small">Retry after {{ local(c.next_retry_at, '%d %b %H:%M') }}</div>{% endif %}
+          </td>
+          <td class="num">{{ c.facts|length }}</td>
+          <td class="nowrap">{% if c.age_days is none %}<span class="muted">—</span>{% elif c.age_days == 0 %}today{% else %}{{ c.age_days }} d{% endif %}</td>
+          <td class="num">{{ u.drafts }} · {{ u.sent }}</td>
+          <td class="nowrap" style="text-align:right">
+            {% if c.facts %}<button class="ghost sm" type="button" data-toggle="research-{{ c.id }}" aria-expanded="false" aria-controls="research-{{ c.id }}">{{ icon("chevron") }} Research</button>{% endif %}
+          </td>
+        </tr>
+        {% if c.facts %}
+        <tr class="research-row" id="research-{{ c.id }}" hidden>
+          <td colspan="6">
+            <div class="research-inline">
+              {% include "_research_facts.html" %}
+              <p class="small"><a href="/companies/{{ c.id }}">Edit or refresh {{ c.name }}'s research →</a></p>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <h2>No companies yet</h2>
+    <p>A company appears here the first time you generate a draft for someone who works there.</p>
+  </div>
+  {% endif %}
+</div>
+<script>
+  const setOpen = (btn, open) => {
+    btn.setAttribute("aria-expanded", String(open));
+    document.getElementById(btn.dataset.toggle).hidden = !open;
+  };
+  document.querySelectorAll("[data-toggle]").forEach((btn) =>
+    btn.addEventListener("click", () => setOpen(btn, btn.getAttribute("aria-expanded") !== "true"))
+  );
+  const all = document.getElementById("toggleAll");
+  if (all) all.addEventListener("click", () => {
+    const open = all.getAttribute("aria-pressed") !== "true";
+    all.setAttribute("aria-pressed", String(open));
+    all.textContent = open ? "Hide all research" : "Show all research";
+    document.querySelectorAll("[data-toggle]").forEach((btn) => setOpen(btn, open));
+  });
+</script>
+{% endblock %}

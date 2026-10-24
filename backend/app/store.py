@@ -7,7 +7,16 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.llm import EFFORTS
-from app.models import SENT_STATUSES, AppSetting, Generation, PromptVersion, Profile, UserContextVersion, utcnow
+from app.models import (
+    SENT_STATUSES,
+    AppSetting,
+    Company,
+    Generation,
+    PromptVersion,
+    Profile,
+    UserContextVersion,
+    utcnow,
+)
 
 CONTEXT_FIELDS = ("background", "target_role", "target_stack", "availability", "location", "notes")
 
@@ -121,6 +130,27 @@ def set_effort(db: Session, effort: str) -> None:
     db.commit()
 
 
+RESEARCH_TTL_KEY = "research_ttl_days"
+MAX_RESEARCH_TTL_DAYS = 3650
+
+
+def get_research_ttl_days(db: Session, default: int) -> int:
+    """Days company research stays fresh: the dashboard's value, else RESEARCH_TTL_DAYS."""
+    row = db.get(AppSetting, RESEARCH_TTL_KEY)
+    return int(row.value) if row and row.value.isdigit() else default
+
+
+def set_research_ttl_days(db: Session, days: int) -> None:
+    if not 1 <= days <= MAX_RESEARCH_TTL_DAYS:
+        raise ValueError(f"Research expiry must be between 1 and {MAX_RESEARCH_TTL_DAYS} days.")
+    row = db.get(AppSetting, RESEARCH_TTL_KEY)
+    if row is None:
+        db.add(AppSetting(key=RESEARCH_TTL_KEY, value=str(days)))
+    else:
+        row.value = str(days)
+    db.commit()
+
+
 # --- profiles ------------------------------------------------------------------
 
 
@@ -136,6 +166,70 @@ def upsert_profile(db: Session, url: str, name: str, headline: str, raw_text: st
     profile.last_seen = now
     db.flush()
     return profile
+
+
+# --- companies -----------------------------------------------------------------
+
+
+def list_companies(db: Session) -> list[Company]:
+    return list(db.scalars(select(Company).order_by(func.lower(Company.name))))
+
+
+def companies_with_generations(db: Session) -> list[Company]:
+    """Companies that at least one draft was written for (for the History filter)."""
+    ids = select(Generation.company_id).where(Generation.company_id.is_not(None)).distinct()
+    return list(db.scalars(select(Company).where(Company.id.in_(ids)).order_by(func.lower(Company.name))))
+
+
+# --- people ---------------------------------------------------------------------
+
+
+@dataclass
+class PersonRow:
+    profile: Profile
+    drafts: int  # every generation, sent or not
+    sent: int
+    replied: int
+    awaiting: int
+    last_sent_at: datetime | None
+    last_status: str  # of their most recent sent message, or "drafted" if none was sent
+    last_mode: str
+    company: Company | None  # from their most recent draft that had one
+
+
+def list_people(db: Session, include_unsent: bool = False, search: str = "") -> list[PersonRow]:
+    """Everyone you drafted for, most recently contacted first. Without `include_unsent`, only people you
+    actually sent a message to."""
+    q = (
+        select(Generation)
+        .options(joinedload(Generation.profile), joinedload(Generation.company))
+        .order_by(func.coalesce(Generation.sent_at, Generation.generated_at).desc(), Generation.id.desc())
+    )
+    people: dict[int, PersonRow] = {}
+    for g in db.scalars(q):
+        row = people.get(g.profile_id)
+        if row is None:
+            row = people[g.profile_id] = PersonRow(g.profile, 0, 0, 0, 0, None, "drafted", g.mode, None)
+        row.drafts += 1
+        if row.company is None and g.company is not None:
+            row.company = g.company
+        if g.status in SENT_STATUSES:
+            if row.sent == 0:  # newest first, so the first sent one is the latest
+                row.last_sent_at, row.last_status, row.last_mode = g.sent_at, g.status, g.mode
+            row.sent += 1
+            row.replied += g.status == "replied"
+            row.awaiting += g.status == "sent"
+    rows = [r for r in people.values() if include_unsent or r.sent]
+    needle = search.strip().casefold()
+    if needle:
+        rows = [
+            r
+            for r in rows
+            if needle in (r.profile.name or "").casefold()
+            or needle in (r.profile.headline or "").casefold()
+            or (r.company is not None and needle in r.company.name.casefold())
+        ]
+    return rows
 
 
 # --- generations ---------------------------------------------------------------
@@ -191,11 +285,16 @@ class HistoryFilters:
     start: datetime | None = None
     end: datetime | None = None
     include_drafts: bool = False
+    strategy: str | None = None  # "none" = drafts without a strategy (made before the generation contract)
+    company_id: int | None = None
+    profile_id: int | None = None
 
 
 def query_generations(db: Session, f: HistoryFilters, limit: int = 500) -> list[Generation]:
     when = func.coalesce(Generation.sent_at, Generation.generated_at)
-    q = select(Generation).options(joinedload(Generation.profile), joinedload(Generation.prompt_version))
+    q = select(Generation).options(
+        joinedload(Generation.profile), joinedload(Generation.prompt_version), joinedload(Generation.company)
+    )
     if f.mode:
         q = q.where(Generation.mode == f.mode)
     if f.language:
@@ -206,6 +305,14 @@ def query_generations(db: Session, f: HistoryFilters, limit: int = 500) -> list[
         q = q.where(Generation.status != "drafted")
     if f.prompt_version_id:
         q = q.where(Generation.prompt_version_id == f.prompt_version_id)
+    if f.strategy == "none":
+        q = q.where(Generation.strategy.is_(None))
+    elif f.strategy:
+        q = q.where(Generation.strategy == f.strategy)
+    if f.company_id:
+        q = q.where(Generation.company_id == f.company_id)
+    if f.profile_id:
+        q = q.where(Generation.profile_id == f.profile_id)
     if f.start:
         q = q.where(when >= f.start)
     if f.end:

@@ -3,25 +3,33 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from app import stats, store
+from app import research, stats, store
 from app.auth import COOKIE_NAME, cookie_value, require_dashboard, token_matches
 from app.config import Settings
 from app.deps import get_db, get_llm, get_settings
 from app.llm import EFFORTS, ChatClient
 from app.modes import LANGUAGES, MODES
-from app.models import SENT_STATUSES, STATUSES, Generation, utcnow
-from app.routers.api import history_filters, run_cv_import
+from app.models import FACT_CATEGORIES, SENT_STATUSES, STATUSES, STRATEGIES, Company, Generation, Profile, utcnow
+from app.routers.api import company_out, history_filters, run_cv_import, run_refresh
 from app.schemas import CVImportOut
 
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 STATUS_LABELS = {"drafted": "Draft", "sent": "Awaiting reply", "replied": "Replied", "no_reply": "No reply"}
-templates.env.globals.update(MODES=MODES, LANGUAGES=LANGUAGES, STATUSES=STATUSES, STATUS_LABELS=STATUS_LABELS)
+templates.env.globals.update(
+    MODES=MODES,
+    LANGUAGES=LANGUAGES,
+    STATUSES=STATUSES,
+    STATUS_LABELS=STATUS_LABELS,
+    STRATEGIES=STRATEGIES,
+    STRATEGY_LABELS=stats.STRATEGY_LABELS,
+    FACT_CATEGORIES=FACT_CATEGORIES,
+)
 # Cache-busting suffix for /static assets: changes whenever the server restarts with new files.
 templates.env.globals["asset_v"] = max(
     int(f.stat().st_mtime) for f in (Path(__file__).parent.parent / "static").rglob("*") if f.is_file()
@@ -258,12 +266,16 @@ def history_page(
     date_from: str = "",
     date_to: str = "",
     drafts: bool = False,
+    strategy: str = "",
+    company_id: str = "",
+    profile_id: str = "",
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     f = history_filters(
         settings, mode, language, status, _opt_int(prompt_version_id), _opt_date(date_from), _opt_date(date_to), drafts
     )
+    f.strategy, f.company_id, f.profile_id = strategy or None, _opt_int(company_id), _opt_int(profile_id)
     rows = store.query_generations(db, f)
     filters = {
         "mode": mode,
@@ -273,13 +285,18 @@ def history_page(
         "date_from": date_from,
         "date_to": date_to,
         "drafts": drafts,
+        "strategy": strategy,
+        "company_id": company_id,
+        "profile_id": profile_id,
     }
     return _render(
         request,
         "history.html",
         rows=rows,
         filters=filters,
+        person=db.get(Profile, f.profile_id) if f.profile_id else None,
         versions=store.list_prompts(db),
+        companies=store.companies_with_generations(db),
         today=datetime.now(_tz(settings)).date().isoformat(),
     )
 
@@ -318,3 +335,111 @@ def history_status(
 def stats_page(request: Request, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
     data = stats.compute(db, _tz(settings))
     return _render(request, "stats.html", data=data)
+
+
+# --- people ----------------------------------------------------------------------------------------
+
+
+@router.get("/people", dependencies=auth)
+def people_page(request: Request, q: str = "", unsent: bool = False, db: Session = Depends(get_db)):
+    rows = store.list_people(db, include_unsent=unsent, search=q)
+    return _render(request, "people.html", rows=rows, q=q, unsent=unsent)
+
+
+# --- companies -------------------------------------------------------------------------------------
+
+
+def _ttl_ctx(db: Session, settings: Settings) -> dict:
+    return {"ttl_days": store.get_research_ttl_days(db, settings.research_ttl_days), "ttl_env": settings.research_ttl_days}
+
+
+def _company_usage(db: Session) -> dict[int, dict]:
+    q = select(
+        Generation.company_id,
+        func.count(),
+        func.sum(case((Generation.status.in_(SENT_STATUSES), 1), else_=0)),
+    ).where(Generation.company_id.is_not(None)).group_by(Generation.company_id)
+    return {cid: {"drafts": n, "sent": s or 0} for cid, n, s in db.execute(q)}
+
+
+@router.get("/companies", dependencies=auth)
+def companies_page(request: Request, saved: bool = False, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    rows = [company_out(db, c, settings) for c in store.list_companies(db)]
+    return _render(request, "companies.html", rows=rows, usage=_company_usage(db), saved=saved, **_ttl_ctx(db, settings))
+
+
+@router.post("/settings/research-ttl", dependencies=auth)
+def settings_research_ttl(days: str = Form(""), db: Session = Depends(get_db)):
+    try:
+        store.set_research_ttl_days(db, int(days))
+    except ValueError as e:
+        return Response(str(e) if days.isdigit() else "Enter a whole number of days.", status_code=400)
+    return RedirectResponse("/companies?saved=1", status_code=303)
+
+
+def _company_or_404(db: Session, company_id: int) -> Company:
+    company = db.get(Company, company_id)
+    if company is None:
+        raise HTTPException(404, "Company not found.")
+    return company
+
+
+def _company_page(request: Request, db: Session, settings: Settings, company: Company, status_code: int = 200, **ctx):
+    recent = list(
+        db.scalars(
+            select(Generation)
+            .where(Generation.company_id == company.id)
+            .order_by(Generation.generated_at.desc())
+            .limit(20)
+        )
+    )
+    return _render(
+        request,
+        "company.html",
+        status_code=status_code,
+        active_page="companies",
+        c=company_out(db, company, settings),
+        recent=recent,
+        **_ttl_ctx(db, settings),
+        **ctx,
+    )
+
+
+@router.get("/companies/{company_id}", dependencies=auth)
+def company_page(
+    request: Request, company_id: int, saved: bool = False, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+):
+    return _company_page(request, db, settings, _company_or_404(db, company_id), saved=saved)
+
+
+@router.post("/companies/{company_id}", dependencies=auth)
+async def company_edit(
+    request: Request, company_id: int, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)
+):
+    company = _company_or_404(db, company_id)
+    form = await request.form()
+    columns = [form.getlist(k) for k in ("category", "fact", "source_url", "date")]
+    facts = [
+        {"category": cat, "fact": fact, "source_url": url.strip(), "date": date.strip() or None}
+        for cat, fact, url, date in zip(*columns)
+    ]
+    website = str(form.get("website") or "").strip() or None
+    problems = research.save_manual(db, company, facts, website)
+    if problems:
+        db.rollback()
+        return _company_page(request, db, settings, company, status_code=422, problems=problems, draft_facts=facts, draft_website=website)
+    return RedirectResponse(f"/companies/{company.id}?saved=1", status_code=303)
+
+
+@router.post("/companies/{company_id}/refresh", dependencies=auth)
+def company_refresh(
+    request: Request,
+    company_id: int,
+    discard_edits: bool = Form(False),
+    db: Session = Depends(get_db),
+    llm: ChatClient = Depends(get_llm),
+    settings: Settings = Depends(get_settings),
+):
+    company = _company_or_404(db, company_id)
+    result = run_refresh(db, llm, settings, company, discard_edits)
+    return _company_page(request, db, settings, db.get(Company, company_id), refresh=result)

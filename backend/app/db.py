@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -30,6 +30,27 @@ def make_engine(url: str) -> Engine:
     return engine
 
 
+def add_missing_columns(engine: Engine) -> None:
+    """The only migration: add columns a newer model has to tables an older version created.
+
+    Additive and nullable only, so existing rows stay valid. Anything else is a manual SQL step. Columns added
+    this way carry no foreign-key constraint (SQLite can't add one later); fresh databases get it.
+    """
+    existing = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not existing.has_table(table.name):
+                continue
+            have = {c["name"] for c in existing.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in have:
+                    continue
+                if not col.nullable:
+                    raise RuntimeError(f"Can't add NOT NULL column {table.name}.{col.name} to an existing table.")
+                ddl = col.type.compile(engine.dialect)
+                conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {ddl}'))
+
+
 class Database:
     """Engine + session factory. One per app; tests build their own in-memory instance."""
 
@@ -41,6 +62,7 @@ class Database:
         from app import models  # noqa: F401  (register tables)
 
         Base.metadata.create_all(self.engine)
+        add_missing_columns(self.engine)
 
     def session(self) -> Iterator[Session]:
         db = self.sessionmaker()

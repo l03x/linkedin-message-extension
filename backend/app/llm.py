@@ -1,5 +1,7 @@
 """Client for an OpenAI-compatible /v1/chat/completions endpoint (e.g. claude-headless-api)."""
 
+import json
+import re
 from typing import Protocol
 
 import httpx
@@ -21,11 +23,51 @@ class LLMError(Exception):
         self.message = message
 
 
+class Completion(str):
+    """The reply text, plus what the API reported about the run.
+
+    `web_searches` is claude-headless-api's `usage.server_tool_use.web_search_requests`; None when the API
+    doesn't report it, which research treats as "not searched".
+    """
+
+    web_searches: int | None
+
+    def __new__(cls, text: str, web_searches: int | None = None) -> "Completion":
+        obj = super().__new__(cls, text)
+        obj.web_searches = web_searches
+        return obj
+
+
+_FENCE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.S)
+
+
+def json_object(raw: str) -> dict:
+    """The JSON object in a model reply, tolerating code fences and text around it. ValueError if there is none."""
+    text = raw.strip()
+    fence = _FENCE.match(text)
+    if fence:
+        text = fence.group(1)
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no JSON object in the reply")
+    obj = json.loads(text[start : end + 1])  # json.JSONDecodeError is a ValueError
+    if not isinstance(obj, dict):
+        raise ValueError("the reply's JSON is not an object")
+    return obj
+
+
 class ChatClient(Protocol):
     model: str
     effort: str
 
-    def complete(self, messages: list[dict], effort: str | None = None) -> str: ...
+    def complete(
+        self,
+        messages: list[dict],
+        effort: str | None = None,
+        *,
+        web_search: bool = False,
+        json_schema: dict | None = None,
+    ) -> Completion: ...
 
 
 def _upstream_message(resp: httpx.Response) -> str:
@@ -40,6 +82,21 @@ def _upstream_message(resp: httpx.Response) -> str:
         if isinstance(body.get("detail"), str):
             return body["detail"]
     return resp.text[:300]
+
+
+def _upstream_code(resp: httpx.Response) -> str:
+    try:
+        err = resp.json().get("error")
+    except (ValueError, AttributeError):
+        return ""
+    return str(err.get("code") or "") if isinstance(err, dict) else ""
+
+
+def _web_searches(body: dict) -> int | None:
+    usage = body.get("usage") if isinstance(body, dict) else None
+    server = usage.get("server_tool_use") if isinstance(usage, dict) else None
+    n = server.get("web_search_requests") if isinstance(server, dict) else None
+    return n if isinstance(n, int) else None
 
 
 class LLMClient:
@@ -58,12 +115,27 @@ class LLMClient:
             transport=transport,
         )
 
-    def complete(self, messages: list[dict], effort: str | None = None) -> str:
-        """`effort` overrides LLM_EFFORT for this call; "" sends none."""
+    def complete(
+        self,
+        messages: list[dict],
+        effort: str | None = None,
+        *,
+        web_search: bool = False,
+        json_schema: dict | None = None,
+    ) -> Completion:
+        """`effort` overrides LLM_EFFORT for this call; "" sends none. `web_search` lets the model search the web
+        (claude-headless-api's `web_search_options`); `json_schema` asks for structured output."""
         effort = self.effort if effort is None else effort
         payload: dict = {"model": self.model, "messages": messages}
         if effort:
             payload["effort"] = effort
+        if web_search:
+            payload["web_search_options"] = {}
+        if json_schema is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "output", "schema": json_schema},
+            }
         try:
             resp = self._client.post("/chat/completions", json=payload)
         except httpx.ConnectError as e:
@@ -82,6 +154,12 @@ class LLMClient:
         except httpx.HTTPError as e:
             raise LLMError(502, "llm_error", f"Request to the LLM API failed: {e}") from e
 
+        if resp.status_code == 400 and _upstream_code(resp) == "web_search_disabled":
+            raise LLMError(
+                502,
+                "web_search_disabled",
+                "The LLM API has web search turned off. In claude-headless-api, tick \"Allow web search\" in Settings.",
+            )
         if resp.status_code == 401:
             raise LLMError(502, "llm_auth", f"The LLM API rejected LLM_API_KEY: {_upstream_message(resp)}")
         if resp.status_code == 403:
@@ -94,9 +172,10 @@ class LLMClient:
             )
 
         try:
-            content = resp.json()["choices"][0]["message"]["content"]
+            body = resp.json()
+            content = body["choices"][0]["message"]["content"]
         except (ValueError, KeyError, IndexError, TypeError) as e:
             raise LLMError(502, "llm_bad_response", "The LLM API returned a response without choices[0].message.content.") from e
         if not isinstance(content, str) or not content.strip():
             raise LLMError(502, "llm_empty", "The LLM API returned an empty message.")
-        return content
+        return Completion(content, _web_searches(body))

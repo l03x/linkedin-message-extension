@@ -85,3 +85,42 @@ def test_timeout():
     with pytest.raises(LLMError) as e:
         _client(handler, llm_timeout_seconds=42).complete([{"role": "user", "content": "u"}])
     assert e.value.status == 504 and "42s" in e.value.message
+
+
+def test_web_search_and_json_schema_are_sent_and_searches_read():
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "{}"}}],
+                "usage": {"prompt_tokens": 1, "server_tool_use": {"web_search_requests": 3}},
+            },
+        )
+
+    schema = {"type": "object"}
+    reply = _client(handler).complete([{"role": "user", "content": "u"}], web_search=True, json_schema=schema)
+    assert reply == "{}" and reply.web_searches == 3
+    assert seen["body"]["web_search_options"] == {}
+    assert seen["body"]["response_format"] == {"type": "json_schema", "json_schema": {"name": "output", "schema": schema}}
+
+
+def test_plain_calls_send_neither_and_report_no_searches():
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return _ok("Hi")
+
+    reply = _client(handler).complete([{"role": "user", "content": "u"}])
+    assert reply.web_searches is None
+    assert "web_search_options" not in seen["body"] and "response_format" not in seen["body"]
+
+
+def test_web_search_disabled_is_explained():
+    response = httpx.Response(400, json={"error": {"message": "Web search is not enabled on this server.", "code": "web_search_disabled"}})
+    with pytest.raises(LLMError) as e:
+        _client(lambda r: response).complete([{"role": "user", "content": "u"}], web_search=True)
+    assert e.value.code == "web_search_disabled" and "Allow web search" in e.value.message

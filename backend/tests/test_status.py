@@ -1,11 +1,11 @@
 from datetime import datetime
 
 from app.models import Generation
-from tests.conftest import AUTH, gen_body
+from tests.conftest import AUTH, draft_json, gen_body
 
 
-def _draft(client, llm, text="original draft", **kw) -> int:
-    llm.queue(text)
+def _draft(client, llm, text="original draft", subject=None, **kw) -> int:
+    llm.queue(draft_json(text, subject=subject))
     return client.post("/api/generate", json=gen_body(**kw), headers=AUTH).json()["generation_id"]
 
 
@@ -27,7 +27,7 @@ def test_resending_keeps_first_sent_at(client, llm, db):
 
 
 def test_inmail_requires_subject(client, llm):
-    gid = _draft(client, llm, "Subject: s\n\nbody", mode="inmail")
+    gid = _draft(client, llm, "body", subject="s", mode="inmail")
     assert client.post(f"/api/generations/{gid}/sent", json={"final_text": "b"}, headers=AUTH).status_code == 400
     r = client.post(f"/api/generations/{gid}/sent", json={"final_text": "b", "final_subject": "edited s"}, headers=AUTH)
     assert r.json()["final_subject"] == "edited s"

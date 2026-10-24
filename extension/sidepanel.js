@@ -35,7 +35,12 @@ const state = {
   language: null,
   payload: null, // the profile last extracted; Regenerate reuses it without re-reading the page
   draft: null, // the last /api/generate response, plus {sent}
+  research: null, // the last /api/research response for that profile
 };
+
+const STRATEGY_LABELS = { hook_only: "Hook only", send_cv: "Send CV", ask_referral: "Ask for a referral" };
+const SOURCE_LABELS = { profile: "From their profile", my_context: "From my context" };
+const isHttp = (url) => /^https?:\/\//i.test(url || "");
 
 // --- persistence (survives closing/reopening the panel, cleared when the browser closes) ---
 
@@ -43,6 +48,8 @@ async function persist() {
   await chrome.storage.session.set({
     payload: state.payload,
     draft: state.draft && { ...state.draft, subject: $("subject").value, body: $("body").value },
+    research: state.research,
+    companyOverride: $("companyOverride").value,
   });
 }
 
@@ -185,23 +192,45 @@ function setBusy(on, label) {
   updateButtons();
 }
 
+const profileBody = (p) => ({ url: p.url, name: p.name, headline: p.headline, raw_text: p.raw_text, company: p.company || null });
+
 async function runGeneration(payload) {
-  const started = Date.now();
-  const tick = () => setBusy(true, `Writing… ${Math.round((Date.now() - started) / 1000)}s`);
+  // Two calls, so the panel can show both phases: research (instant when cached), then drafting.
+  const company = (payload.company && payload.company.name) || "their company";
+  let phase = `Researching ${company}…`;
+  let since = Date.now();
+  const tick = () => setBusy(true, `${phase} ${Math.round((Date.now() - since) / 1000)}s`);
   tick();
   setStatus($("status"), "info", "");
   const timer = setInterval(tick, 1000);
+  const override = $("companyOverride").value.trim();
   try {
+    try {
+      state.research = await api("/api/research", {
+        method: "POST",
+        body: { profile: profileBody(payload), company_override: override },
+      });
+    } catch (e) {
+      // Drafting works without research; the draft call reports the details.
+      state.research = { company: null, used: false, researched: false, error: e.message, notice: null };
+    }
+    renderResearch();
+    phase = "Writing…";
+    since = Date.now();
+    tick();
     const res = await api("/api/generate", {
       method: "POST",
       body: {
-        profile: { url: payload.url, name: payload.name, headline: payload.headline, raw_text: payload.raw_text },
+        profile: profileBody(payload),
         mode: state.mode,
         language: state.language,
         extra_instruction: $("extra").value,
+        company_override: override,
       },
     });
     state.draft = { ...res, profileName: payload.name || payload.url, profileUrl: payload.url, sent: false };
+    if (res.company) state.research = { ...(state.research || {}), company: res.company, used: res.research_used };
+    renderResearch();
     renderDraft();
     await persist();
     $("draftSection").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -227,6 +256,7 @@ async function onGenerate() {
     setStatus($("status"), "error", "The profile looks empty. Wait for the page to finish loading, then try again.");
     return;
   }
+  if (!state.payload || slugOf(state.payload.url) !== slugOf(payload.url)) $("companyOverride").value = "";
   state.payload = payload;
   await runGeneration(payload);
 }
@@ -274,8 +304,138 @@ function renderDraft() {
   $("draftBadge").hidden = !d.sent;
   $("draftBadge").textContent = "Sent";
   setStatus($("draftStatus"), "info", "");
+  renderWhy(d);
   renderDraftFor();
   updateCounters();
+}
+
+function sourceLine(fact) {
+  const div = document.createElement("span");
+  div.className = "src";
+  if (fact.kind === "url" && isHttp(fact.source)) {
+    const a = document.createElement("a");
+    a.href = fact.source;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = fact.source;
+    div.append(a);
+    if (!fact.verified) {
+      div.classList.add("unverified");
+      div.append(" · not in the company research");
+    }
+  } else if (SOURCE_LABELS[fact.kind]) {
+    div.textContent = SOURCE_LABELS[fact.kind];
+  } else {
+    div.classList.add("unverified");
+    div.textContent = `No valid source${fact.source ? `: ${fact.source}` : ""}`;
+  }
+  return div;
+}
+
+function renderWhy(d) {
+  // Drafts saved before the generation contract have none of this.
+  const has = d.strategy || d.strategy_reason || (d.facts_used && d.facts_used.length);
+  $("why").hidden = !has;
+  if (!has) return;
+  const chip = $("strategyChip");
+  chip.textContent = STRATEGY_LABELS[d.strategy] || "No strategy";
+  chip.classList.toggle("none", !d.strategy);
+  $("strategyReason").textContent = d.strategy_reason || "";
+  $("cvMatch").textContent = d.cv_match || "—";
+  const items = (d.facts_used || []).map((f) => {
+    const li = document.createElement("li");
+    li.textContent = f.fact;
+    li.append(sourceLine(f));
+    return li;
+  });
+  if (!items.length) {
+    const li = document.createElement("li");
+    li.textContent = "The model listed no facts.";
+    items.push(li);
+  }
+  $("factsUsed").replaceChildren(...items);
+}
+
+// --- company research view ---
+
+function ageText(days) {
+  if (days === null || days === undefined) return "";
+  if (days === 0) return "today";
+  return days === 1 ? "1 day old" : `${days} days old`;
+}
+
+function renderResearch() {
+  const r = state.research;
+  $("researchSection").hidden = !r;
+  if (!r) return;
+  const c = r.company;
+  const badge = $("researchBadge");
+  badge.hidden = false;
+  if (!c) {
+    $("researchSub").textContent = "No current company found on this profile";
+    badge.textContent = "None";
+    badge.className = "badge muted";
+  } else {
+    const when = c.manually_edited ? `edited by you, ${ageText(c.age_days)}` : ageText(c.age_days);
+    $("researchSub").textContent = [c.name, when].filter(Boolean).join(" · ");
+    if (r.used) [badge.textContent, badge.className] = [c.manually_edited ? "Edited" : "Used in drafts", "badge"];
+    else if (c.status === "failed") [badge.textContent, badge.className] = ["Failed", "badge bad"];
+    else [badge.textContent, badge.className] = ["Not used", "badge warn"];
+  }
+
+  const notices = [];
+  if (r.error) notices.push(notice("bad", "alert", `Research failed: ${r.error} Drafts are written without it.`));
+  if (r.notice && !(r.error && r.notice.includes(r.error))) notices.push(notice("info", "info", r.notice));
+  if (c && c.status === "failed" && c.next_retry_at && !r.error) {
+    notices.push(notice("", "alert", `Last research failed: ${c.last_error || "unknown error"}`));
+  }
+  $("researchNotices").replaceChildren(...notices);
+
+  const facts = (c && c.facts) || [];
+  $("researchFactsWrap").hidden = !facts.length;
+  $("researchFactsSummary").textContent = `${facts.length} sourced fact${facts.length === 1 ? "" : "s"}${c && c.website ? ` · ${c.website}` : ""}`;
+  $("researchFacts").replaceChildren(
+    ...facts.map((f) => {
+      const li = document.createElement("li");
+      const cat = document.createElement("span");
+      cat.className = "cat";
+      cat.textContent = f.category;
+      li.append(cat, f.fact + (f.date ? ` (${f.date})` : ""));
+      li.append(sourceLine({ kind: "url", source: f.source_url, verified: true }));
+      return li;
+    })
+  );
+  updateButtons();
+}
+
+async function onRefreshResearch() {
+  if (!state.payload || busy) return;
+  const btn = $("refreshResearch");
+  const started = Date.now();
+  busy = true;
+  btn.querySelector(".spinner").hidden = false;
+  const tick = () => (btn.querySelector(".btn-label").textContent = `Researching… ${Math.round((Date.now() - started) / 1000)}s`);
+  tick();
+  const timer = setInterval(tick, 1000);
+  updateButtons();
+  setStatus($("researchStatus"), "info", "");
+  try {
+    state.research = await api("/api/research", {
+      method: "POST",
+      body: { profile: profileBody(state.payload), company_override: $("companyOverride").value.trim(), force: true },
+    });
+    renderResearch();
+    if (state.research.researched) setStatus($("researchStatus"), "ok", "Research refreshed. Regenerate to use it.");
+    await persist();
+  } catch (e) {
+    setStatus($("researchStatus"), "error", e.message);
+  } finally {
+    clearInterval(timer);
+    busy = false;
+    btn.querySelector(".spinner").hidden = true;
+    btn.querySelector(".btn-label").textContent = "Refresh research";
+    updateButtons();
+  }
 }
 
 function renderDraftFor() {
@@ -323,6 +483,7 @@ function updateCounters() {
 function updateButtons() {
   $("generate").disabled = !(state.options && state.tab) || busy;
   $("regenerate").disabled = busy || !state.payload || !state.options;
+  $("refreshResearch").disabled = busy || !state.payload;
   const d = state.draft;
   const over = overLimit();
   const empty = d && !$("body").value.trim();
@@ -401,6 +562,8 @@ async function init() {
   $("copy").addEventListener("click", () => copy($("body").value, "Message"));
   $("copySubject").addEventListener("click", () => copy($("subject").value, "Subject"));
   $("markSent").addEventListener("click", onMarkSent);
+  $("refreshResearch").addEventListener("click", onRefreshResearch);
+  $("companyOverride").addEventListener("input", persistSoon);
   $("saveSettings").addEventListener("click", onSaveSettings);
   $("testConnection").addEventListener("click", onTestConnection);
   for (const id of ["subject", "body"]) {
@@ -426,12 +589,15 @@ async function init() {
   });
 
   await loadSettingsForm();
-  const saved = await chrome.storage.session.get(["payload", "draft"]);
+  const saved = await chrome.storage.session.get(["payload", "draft", "research", "companyOverride"]);
   state.payload = saved.payload || null;
   state.draft = saved.draft || null;
+  state.research = saved.research || null;
+  $("companyOverride").value = saved.companyOverride || "";
   await loadOptions();
   await refreshTab();
   renderDraft();
+  renderResearch();
 }
 
 init();

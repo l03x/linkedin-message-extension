@@ -3,7 +3,6 @@ structure it. Nothing is stored here: the dashboard pre-fills the form and you r
 
 import html
 import io
-import json
 import re
 import subprocess
 import tempfile
@@ -14,7 +13,7 @@ from pathlib import Path
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.llm import ChatClient
+from app.llm import ChatClient, json_object
 from app.store import CONTEXT_FIELDS
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -226,19 +225,10 @@ Rules:
 
 
 def parse_fields(raw: str) -> dict[str, str]:
-    text = raw.strip()
-    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.S)
-    if fence:
-        text = fence.group(1)
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end <= start:
-        raise CVImportError(502, "llm_bad_json", "The model didn't return the expected JSON. Try again.")
     try:
-        obj = json.loads(text[start : end + 1])
-    except json.JSONDecodeError as e:
-        raise CVImportError(502, "llm_bad_json", "The model didn't return valid JSON. Try again.") from e
-    if not isinstance(obj, dict):
-        raise CVImportError(502, "llm_bad_json", "The model didn't return a JSON object. Try again.")
+        obj = json_object(raw)
+    except ValueError as e:
+        raise CVImportError(502, "llm_bad_json", "The model didn't return the expected JSON object. Try again.") from e
 
     fields = {}
     for key in CONTEXT_FIELDS:

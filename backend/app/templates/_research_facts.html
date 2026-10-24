@@ -1,0 +1,16 @@
+{# Facts grouped by category, with clickable sources. Needs `c`, a CompanyOut. #}
+{% from "_icons.html" import icon %}
+{% if c.facts %}
+<ul class="sources">
+  {% for cat in FACT_CATEGORIES %}
+    {% set group = c.facts|selectattr("category", "equalto", cat)|list %}
+    {% if group %}
+    <li class="src-cat">{{ cat }}</li>
+    {% for f in group %}
+    <li>{{ f.fact }}{% if f.date %} <span class="muted">({{ f.date }})</span>{% endif %}
+      <div class="small"><a href="{{ f.source_url }}" target="_blank" rel="noopener noreferrer">{{ f.source_url }}{{ icon("external") }}</a></div></li>
+    {% endfor %}
+    {% endif %}
+  {% endfor %}
+</ul>
+{% else %}<p class="muted">No sourced facts.</p>{% endif %}

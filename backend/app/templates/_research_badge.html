@@ -1,0 +1,7 @@
+{# Needs `c`, a CompanyOut. #}
+{% if c.manually_edited %}<span class="badge active">Edited by you</span>
+{% elif c.status == "researching" %}<span class="badge sent"><span class="dot"></span>Researching…</span>
+{% elif c.fresh %}<span class="badge replied"><span class="dot"></span>Fresh</span>
+{% elif c.status == "ready" %}<span class="badge drafted"><span class="dot"></span>Expired</span>
+{% elif c.status == "failed" %}<span class="badge no_reply"><span class="dot"></span>Failed</span>
+{% else %}<span class="badge drafted"><span class="dot"></span>Not researched</span>{% endif %}

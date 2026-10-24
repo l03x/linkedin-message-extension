@@ -94,6 +94,26 @@
   </div>
 </div>
 
+<div class="grid-half wide-content">
+  <div class="card">
+    <div class="card-head"><div><h2>Reply rate by strategy</h2><p>The strategy the model picked for each draft</p></div></div>
+    {% if data.by_strategy %}
+    <div class="card-body"><div class="chart-box" style="height:{{ 60 + 40 * data.by_strategy|length }}px"><canvas id="strategyChart"></canvas></div></div>
+    {{ rate_table(data.by_strategy) }}
+    {% else %}<div class="empty">No sent messages with a strategy yet.</div>{% endif %}
+  </div>
+  <div class="card">
+    <div class="card-head"><div><h2>With vs without company research</h2><p>Whether the draft's prompt held sourced company facts</p></div></div>
+    {% if data.by_research %}
+    <div class="card-body"><div class="chart-box" style="height:{{ 60 + 40 * data.by_research|length }}px"><canvas id="researchChart"></canvas></div></div>
+    {{ rate_table(data.by_research) }}
+    {% else %}<div class="empty">No sent messages from the research flow yet.</div>{% endif %}
+  </div>
+</div>
+{% if data.pre_contract %}
+<p class="legend-note">{{ data.pre_contract }} sent message{{ 's' if data.pre_contract != 1 }} from before strategies and research {{ 'are' if data.pre_contract != 1 else 'is' }} left out of these two charts: {{ 'they have' if data.pre_contract != 1 else 'it has' }} neither.</p>
+{% endif %}
+
 <div class="card">
   <div class="card-head">
     <div><h2>Time to reply</h2><p>{% if ttr.enough %}{{ ttr.n }} replies{% else %}Shown once there are at least 5 replies{% endif %}</p></div>
@@ -213,6 +233,8 @@ document.addEventListener("DOMContentLoaded", () => {
     };
     rateChart("promptChart", S.by_prompt);
     rateChart("modeChart", S.by_mode);
+    rateChart("strategyChart", S.by_strategy);
+    rateChart("researchChart", S.by_research);
 
     const ttrEl = document.getElementById("ttrChart");
     if (ttrEl) {

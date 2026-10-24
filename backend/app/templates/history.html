@@ -11,6 +11,11 @@
 
 <div class="card">
   <form method="get" action="/history" class="toolbar" id="filters">
+    {% if person %}
+    <input type="hidden" name="profile_id" value="{{ person.id }}">
+    <span class="chip person-filter">Messages to {{ person.name or person.linkedin_url }}
+      <a href="{{ request.url.include_query_params(profile_id='') }}" title="Show everyone" aria-label="Show everyone">{{ icon("x") }}</a></span>
+    {% endif %}
     <select name="mode" aria-label="Mode">
       <option value="">All modes</option>
       {% for k, m in MODES.items() %}<option value="{{ k }}" {{ 'selected' if filters.mode == k }}>{{ m.label }}</option>{% endfor %}
@@ -27,6 +32,17 @@
       <option value="">All prompt versions</option>
       {% for v in versions %}<option value="{{ v.id }}" {{ 'selected' if filters.prompt_version_id == v.id|string }}>#{{ v.id }} {{ v.name }}</option>{% endfor %}
     </select>
+    <select name="strategy" aria-label="Strategy">
+      <option value="">Any strategy</option>
+      {% for k in STRATEGIES %}<option value="{{ k }}" {{ 'selected' if filters.strategy == k }}>{{ STRATEGY_LABELS[k] }}</option>{% endfor %}
+      <option value="none" {{ 'selected' if filters.strategy == 'none' }}>No strategy (older drafts)</option>
+    </select>
+    {% if companies %}
+    <select name="company_id" aria-label="Company">
+      <option value="">All companies</option>
+      {% for c in companies %}<option value="{{ c.id }}" {{ 'selected' if filters.company_id == c.id|string }}>{{ c.name }}</option>{% endfor %}
+    </select>
+    {% endif %}
     <span class="range">
       <input name="date_from" type="date" value="{{ filters.date_from }}" aria-label="From date">
       <span>–</span>

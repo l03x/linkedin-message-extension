@@ -31,6 +31,12 @@
         <span class="chip" title="{{ MODES[g.mode].label if g.mode in MODES else g.mode }}">{{ MODES[g.mode].short_label if g.mode in MODES else g.mode }}</span>
         <span class="chip" title="{{ lang.label if lang else g.language }}">{{ g.language|upper }}</span>
       </span>
+      {% if g.strategy or g.company %}
+      <span style="display:flex;gap:6px;flex-wrap:wrap">
+        {% if g.strategy %}<span class="chip strategy" title="{{ g.strategy_reason or '' }}">{{ STRATEGY_LABELS.get(g.strategy, g.strategy) }}</span>{% endif %}
+        {% if g.company %}<a class="chip" href="/companies/{{ g.company.id }}" title="{{ 'Drafted with company research' if g.research_used else 'Drafted without company research' }}">{{ g.company.name }}{% if not g.research_used %} · no research{% endif %}</a>{% endif %}
+      </span>
+      {% endif %}
       <span class="muted small">Prompt #{{ g.prompt_version_id }} · {{ g.prompt_version.name }}</span>
     </div>
   </td>

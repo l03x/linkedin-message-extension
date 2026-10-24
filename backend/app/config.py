@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     llm_effort: str = ""
     llm_timeout_seconds: float = 180.0
 
+    # How long company research stays fresh. The dashboard's Companies page can override it.
+    research_ttl_days: int = 30
+
     # Tesseract languages for OCR of scanned CVs ("+"-separated). eng, fra and ara are installed in the image.
     ocr_langs: str = "eng+fra"
 

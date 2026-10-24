@@ -59,12 +59,29 @@ export function extractProfile() {
     rawText += line + "\n";
   }
 
+  // Current company, for the backend's company research. Read from attributes already on the page: the top
+  // card's "Current company: X" button, and the /company/<slug>/ link of the first Experience entry. The slug
+  // is only a cache key; nothing ever opens it.
+  const company = { name: "", linkedin_slug: null };
+  const current = root.querySelector('[aria-label^="Current company" i], [aria-label^="Entreprise actuelle" i]');
+  if (current) {
+    company.name = clean(current.getAttribute("aria-label"))
+      .replace(/^(current company|entreprise actuelle)\s*:\s*/i, "")
+      .replace(/\.\s*(click|cliquez).*$/i, "");
+  }
+  const anchor = document.getElementById("experience");
+  const section = anchor && anchor.closest("section");
+  const link = section && section.querySelector('a[href*="/company/"]');
+  const slugMatch = link && (link.getAttribute("href") || "").match(/\/company\/([^/?#]+)/);
+  if (slugMatch) company.linkedin_slug = decodeURIComponent(slugMatch[1]).toLowerCase().slice(0, 200);
+
   const slug = (location.pathname.match(/^\/in\/([^/]+)/) || [])[1] || "";
   return {
     url: `https://www.linkedin.com/in/${slug}/`,
     name: name.slice(0, 300),
     headline: headline.slice(0, 1000),
     raw_text: rawText.trim(),
+    company: { name: company.name.slice(0, 300), linkedin_slug: company.linkedin_slug },
     truncated: lines.join("\n").length > rawText.length,
   };
 }

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block content %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <p><a href="/companies">← Companies</a></p>
+    <h1>{{ c.name }}</h1>
+    <p>
+      {% include "_research_badge.html" %}
+      {% if c.manually_edited and c.edited_at %}Edited on {{ local(c.edited_at, '%d %b %Y') }}
+      {%- elif c.researched_at %}Researched on {{ local(c.researched_at, '%d %b %Y, %H:%M') }}{% if c.web_searches %} · {{ c.web_searches }} web search{{ 'es' if c.web_searches != 1 }}{% endif %}{% if c.rejected_facts %} · {{ c.rejected_facts }} unsourced fact{{ 's' if c.rejected_facts != 1 }} dropped{% endif %}
+      {%- else %}Not researched yet{% endif %}
+      {% if c.linkedin_slug %} · LinkedIn handle <code>{{ c.linkedin_slug }}</code>{% endif %}
+    </p>
+  </div>
+  <form method="post" action="/companies/{{ c.id }}/refresh" id="refreshForm"
+        {% if c.manually_edited %}data-confirm="You edited this research by hand. Refreshing replaces your version with a new web search. Continue?"{% endif %}>
+    {% if c.manually_edited %}<input type="hidden" name="discard_edits" value="true">{% endif %}
+    <button class="primary" type="submit" id="refreshBtn"><span class="spinner" hidden></span><span class="btn-label">Refresh research</span></button>
+  </form>
+</div>
+
+{% if saved %}<div class="notice ok">{{ icon("check") }}<span>Saved. Drafts use your version from now on, and it is never refreshed automatically.</span></div>{% endif %}
+{% if refresh %}
+  {% if refresh.error %}<div class="notice bad">{{ icon("alert") }}<span>Research failed: {{ refresh.error }}</span></div>
+  {% elif refresh.notice %}<div class="notice warn">{{ icon("info") }}<span>{{ refresh.notice }}</span></div>
+  {% elif refresh.researched %}<div class="notice ok">{{ icon("check") }}<span>Researched again: {{ c.facts|length }} sourced facts.</span></div>{% endif %}
+{% endif %}
+{% if c.status == "failed" and c.last_error and not (refresh and refresh.error) %}
+<div class="notice warn">{{ icon("alert") }}<span>Last research failed: {{ c.last_error }}{% if c.next_retry_at %} It is tried again after {{ local(c.next_retry_at, '%d %b %H:%M') }}, or when you refresh.{% endif %}</span></div>
+{% endif %}
+{% if problems %}
+<div class="notice bad">{{ icon("alert") }}<span>Not saved. {{ problems|join(' ') }}</span></div>
+{% endif %}
+
+<div class="grid2">
+  <form class="card" method="post" action="/companies/{{ c.id }}" id="editForm">
+    <div class="card-head">
+      <div>
+        <h2>Research</h2>
+        <p>What drafts see in <code>&lt;company_research&gt;</code>. Edit it and save to make it yours; every fact needs a source URL.</p>
+      </div>
+      <button class="ghost sm" type="button" id="addFact">+ Add fact</button>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label for="website">Website</label>
+        <input id="website" name="website" type="url" value="{{ draft_website if problems else (c.website or '') }}" placeholder="https://…">
+      </div>
+      <div class="facts-edit" id="facts">
+        {% set facts = draft_facts if problems else c.facts %}
+        {% for f in facts %}{% include "_fact_row.html" %}{% endfor %}
+      </div>
+      {% if not facts %}<p class="muted small" id="noFacts">No facts yet. Refresh the research, or add your own with a source.</p>{% endif %}
+      <div class="editor-foot">
+        <span class="hint">Saving marks the research as edited by you.</span>
+        <button class="primary" type="submit">Save my version</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="card">
+    <div class="card-head"><div><h2>Sources</h2><p>Open them to check a fact before you rely on it.</p></div></div>
+    <div class="card-body">
+      {% include "_research_facts.html" %}
+    </div>
+    {% if recent %}
+    <div class="card-head" style="border-top:1px solid var(--border)"><div><h2>Drafts for people here</h2></div></div>
+    <div class="card-body">
+      <ul class="sources">
+        {% for g in recent %}
+        <li>{{ g.profile.name or g.profile.linkedin_url }} · {{ STRATEGY_LABELS.get(g.strategy, 'no strategy') }} · {{ STATUS_LABELS[g.status] }}
+          <span class="muted small">· {{ local(g.generated_at, '%d %b') }}{% if g.research_used is false %} · without research{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+      <p class="small"><a href="/history?company_id={{ c.id }}&drafts=true">See them in History</a></p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<template id="factTemplate">{% with f = {"category": "domain", "fact": "", "source_url": "", "date": None} %}{% include "_fact_row.html" %}{% endwith %}</template>
+<script>
+  const facts = document.getElementById("facts");
+  document.getElementById("addFact").addEventListener("click", () => {
+    facts.append(document.getElementById("factTemplate").content.cloneNode(true));
+    const none = document.getElementById("noFacts");
+    if (none) none.remove();
+    facts.lastElementChild.querySelector("textarea").focus();
+  });
+  facts.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-remove]");
+    if (btn) btn.closest(".fact-row").remove();
+  });
+  const refreshForm = document.getElementById("refreshForm");
+  refreshForm.addEventListener("submit", (e) => {
+    if (refreshForm.dataset.confirm && !confirm(refreshForm.dataset.confirm)) return e.preventDefault();
+    const btn = document.getElementById("refreshBtn");
+    btn.disabled = true;
+    btn.querySelector(".spinner").hidden = false;
+    const started = Date.now();
+    const tick = () => (btn.querySelector(".btn-label").textContent = `Searching the web… ${Math.round((Date.now() - started) / 1000)}s`);
+    tick();
+    setInterval(tick, 1000);
+  });
+</script>
+{% endblock %}

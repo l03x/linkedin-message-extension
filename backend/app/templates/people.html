@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}People{% endblock %}
+{% block content %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>People</h1>
+    <p>Everyone you've written to, most recently contacted first.</p>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" action="/people" class="toolbar" id="filters">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search name, headline or company" aria-label="Search people" class="search">
+    <label class="check small"><input type="checkbox" name="unsent" value="true" {{ 'checked' if unsent }}> Include people with unsent drafts only</label>
+    <span class="spacer"></span>
+    <noscript><button type="submit" class="sm">Apply</button></noscript>
+    {% if q or unsent %}<a href="/people" class="btn ghost sm">{{ icon("x") }} Clear</a>{% endif %}
+  </form>
+
+  {% if rows %}
+  <div class="result-count">{{ rows|length }} {{ 'person' if rows|length == 1 else 'people' }} · {{ rows|selectattr("replied")|list|length }} replied at least once</div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Person</th><th>Company</th><th class="num">Sent</th><th>Last contacted</th><th style="text-align:right">Latest status</th></tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% set p = r.profile %}
+        <tr>
+          <td>
+            <div class="person">
+              <span class="avatar" aria-hidden="true">{{ (p.name or '?')|initials }}</span>
+              <div>
+                <a href="{{ p.linkedin_url }}" target="_blank" rel="noopener noreferrer">{{ p.name or p.linkedin_url }}{{ icon("external") }}</a>
+                {% if p.headline %}<div class="headline">{{ p.headline }}</div>{% endif %}
+              </div>
+            </div>
+          </td>
+          <td>{% if r.company %}<a href="/companies/{{ r.company.id }}">{{ r.company.name }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="num">
+            {{ r.sent }}{% if r.drafts > r.sent %} <span class="muted small" title="Drafts you didn't send">+{{ r.drafts - r.sent }} draft{{ 's' if r.drafts - r.sent != 1 }}</span>{% endif %}
+          </td>
+          <td>
+            {% if r.last_sent_at %}
+            <span class="nowrap">{{ local(r.last_sent_at, '%d %b %Y') }}</span>
+            <div class="muted small">{{ MODES[r.last_mode].label if r.last_mode in MODES else r.last_mode }}</div>
+            {% else %}<span class="muted">Never sent</span>{% endif %}
+          </td>
+          <td style="text-align:right">
+            <span class="badge {{ r.last_status }}"><span class="dot"></span>{{ STATUS_LABELS[r.last_status] }}</span>
+            {% if r.sent > 1 %}<div class="muted small" style="margin-top:4px">{{ r.replied }} of {{ r.sent }} replied</div>{% endif %}
+            <div class="small" style="margin-top:4px"><a href="/history?profile_id={{ p.id }}&drafts=true">Messages →</a></div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <h2>{{ 'No matches' if q or unsent else 'Nobody yet' }}</h2>
+    <p>{% if q or unsent %}No one matches this search.{% else %}People appear here once you click <strong>Mark as sent</strong> in the extension.{% endif %}</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  const form = document.getElementById("filters");
+  form.addEventListener("change", () => form.requestSubmit());
+  let t;
+  form.q.addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => form.requestSubmit(), 400); });
+</script>
+{% endblock %}

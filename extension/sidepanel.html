@@ -67,6 +67,18 @@
       <div class="counter" id="bodyCount"></div>
     </div>
 
+    <div class="why" id="why">
+      <div class="why-row">
+        <span class="label">Strategy</span>
+        <span class="chip" id="strategyChip"></span>
+      </div>
+      <p class="why-text" id="strategyReason"></p>
+      <div class="label">CV match</div>
+      <p class="why-text" id="cvMatch"></p>
+      <div class="label">Facts used <span class="optional">check them before sending</span></div>
+      <ul class="facts" id="factsUsed"></ul>
+    </div>
+
     <div class="buttons">
       <button id="regenerate" type="button" title="Write a new draft from the same profile">Regenerate</button>
       <button id="copy" class="primary" type="button">Copy message</button>
@@ -74,6 +86,29 @@
     <button id="markSent" class="wide outline" type="button">Mark as sent</button>
     <div id="draftStatus" class="status" hidden></div>
     <p class="footnote">Paste it into LinkedIn and send it yourself. This extension never sends anything.</p>
+  </section>
+
+  <section class="card" id="researchSection" hidden>
+    <div class="draft-head">
+      <div>
+        <div class="title">Company research</div>
+        <div class="sub" id="researchSub"></div>
+      </div>
+      <span class="badge" id="researchBadge" hidden></span>
+    </div>
+    <div id="researchNotices"></div>
+    <details class="research-facts" id="researchFactsWrap" hidden>
+      <summary id="researchFactsSummary"></summary>
+      <ul class="facts" id="researchFacts"></ul>
+    </details>
+    <div class="group">
+      <label class="label" for="companyOverride">Wrong company? <span class="optional">used on Regenerate</span></label>
+      <input id="companyOverride" type="text" maxlength="300" placeholder="Their current company">
+    </div>
+    <button id="refreshResearch" class="wide outline" type="button" title="Search the web again for this company">
+      <span class="spinner" hidden></span><span class="btn-label">Refresh research</span>
+    </button>
+    <div id="researchStatus" class="status" hidden></div>
   </section>
 
   <details class="card settings" id="settings">
