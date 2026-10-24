@@ -24,7 +24,7 @@ STATUS_LABELS = {"drafted": "Draft", "sent": "Awaiting reply", "replied": "Repli
 templates.env.globals.update(MODES=MODES, LANGUAGES=LANGUAGES, STATUSES=STATUSES, STATUS_LABELS=STATUS_LABELS)
 # Cache-busting suffix for /static assets: changes whenever the server restarts with new files.
 templates.env.globals["asset_v"] = max(
-    int(f.stat().st_mtime) for f in (Path(__file__).parent.parent / "static").iterdir() if f.is_file()
+    int(f.stat().st_mtime) for f in (Path(__file__).parent.parent / "static").rglob("*") if f.is_file()
 )
 
 

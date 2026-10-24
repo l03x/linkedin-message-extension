@@ -1,5 +1,7 @@
 /* Theme tokens. Light is the default; dark follows the OS unless a theme is picked in the header. */
 :root {
+  --font-sans: "Inter", "Noto Sans Arabic", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --bg: #f5f5f3;
   --surface: #ffffff;
   --surface-2: #fafaf8;
@@ -103,7 +105,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font: 14px/1.5 var(--font-sans);
+  font-feature-settings: "cv11"; /* Inter: single-storey a, a little softer */
   -webkit-font-smoothing: antialiased;
 }
 a { color: var(--accent); text-decoration: none; }
@@ -111,7 +114,7 @@ a:hover { text-decoration: underline; }
 h1 { font-size: 22px; line-height: 1.25; font-weight: 650; margin: 0; letter-spacing: -0.01em; }
 h2 { font-size: 15px; font-weight: 600; margin: 0; }
 p { margin: 0; }
-code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+code { font: 12.5px var(--font-mono); background: var(--code); padding: 1px 5px; border-radius: 4px; }
 .muted { color: var(--muted); }
 .small { font-size: 12.5px; }
 .nowrap { white-space: nowrap; }
@@ -188,7 +191,7 @@ select {
   background-repeat: no-repeat; background-position: right 9px center; background-size: 14px;
 }
 textarea { resize: vertical; line-height: 1.55; }
-textarea.prompt { min-height: 560px; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; }
+textarea.prompt { min-height: 560px; font: 13px/1.6 var(--font-mono); tab-size: 2; }
 input:focus, select:focus, textarea:focus {
   outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
@@ -322,7 +325,7 @@ details.menu > summary::-webkit-details-marker { display: none; }
 .versions .v-name { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .versions .v-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .editor-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
-.diff { font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; padding: 8px 0; }
+.diff { font: 12.5px/1.6 var(--font-mono); white-space: pre-wrap; word-break: break-word; padding: 8px 0; }
 .diff div { padding: 1px 20px; }
 .diff .add { background: var(--ok-soft); color: var(--ok); }
 .diff .del { background: var(--bad-soft); color: var(--bad); }
@@ -334,7 +337,7 @@ details.menu > summary::-webkit-details-marker { display: none; }
 
 /* ---------- context preview ---------- */
 .preview {
-  white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.6 var(--font-mono);
   color: var(--text-2); background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px 14px;
   border: 1px solid var(--border);
   /* Long backgrounds scroll inside the box instead of stretching the page. */

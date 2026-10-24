@@ -8,6 +8,8 @@
   <script src="/static/theme.js?v={{ asset_v }}"></script>
   <link rel="icon" href="/static/favicon.svg?v={{ asset_v }}" type="image/svg+xml">
   <link rel="icon" href="/static/favicon.png?v={{ asset_v }}" type="image/png" sizes="64x64">
+  <link rel="preload" href="/static/fonts/inter-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/fonts/fonts.css?v={{ asset_v }}">
   <link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/htmx.min.js" defer></script>
   {% block head %}{% endblock %}

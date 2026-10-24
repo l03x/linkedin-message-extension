@@ -77,3 +77,8 @@ def test_favicon_is_public(client):
     r = client.get("/favicon.ico")
     assert r.status_code == 200 and r.headers["content-type"] == "image/x-icon"
     assert client.get("/static/favicon.svg").status_code == 200
+
+
+def test_fonts_are_served_as_fonts(client):
+    r = client.get("/static/fonts/inter-latin-standard-normal.woff2")
+    assert r.status_code == 200 and r.headers["content-type"] == "font/woff2"

@@ -124,7 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const root = getComputedStyle(document.documentElement);
     const css = (v) => root.getPropertyValue(v).trim();
     const series = (i) => css(`--series-${(i % 3) + 1}`);
-    Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+    Chart.defaults.font.family = getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim();
     Chart.defaults.font.size = 12;
     Chart.defaults.color = css("--text-2");
     const grid = { color: css("--grid") };
@@ -244,6 +244,8 @@ document.addEventListener("DOMContentLoaded", () => {
   );
   document.addEventListener("themechange", draw);
   draw();
+  // Canvas text doesn't reflow when a web font arrives, so redraw once Inter has loaded.
+  document.fonts.load('12px "Inter"').then(draw);
 });
 </script>
 {% endblock %}

@@ -1,3 +1,4 @@
+import mimetypes
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -15,6 +16,9 @@ from app.routers import api, dashboard
 from app.seed import seed
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+# The slim image has no /etc/mime.types, so StaticFiles would serve the bundled fonts as text/plain.
+mimetypes.add_type("font/woff2", ".woff2")
 
 
 def create_app(settings: Settings | None = None, llm: ChatClient | None = None) -> FastAPI:

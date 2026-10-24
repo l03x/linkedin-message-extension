@@ -255,5 +255,9 @@ docker compose cp backend:/data/app.db ./app-backup.db
   packages (no AGPL wheel, nothing leaves your machine), and the CLI avoids extra Python bindings. A PDF
   is OCR'd only when its text layer is under 200 characters, and only the first 5 pages, since a CV
   rarely runs longer and OCR takes a few seconds per page.
+- **Fonts are bundled, not loaded from Google Fonts.** Inter for the UI, JetBrains Mono for the prompt
+  editor and context preview, and Noto Sans Arabic for Arabic drafts, all SIL OFL. They live in
+  `backend/app/static/fonts/` and `extension/fonts/`, so nothing leaves your machine and the extension needs
+  no extra permissions. `unicode-range` means the Arabic font is downloaded only when Arabic text is on screen.
 - **No automatic follow-ups or reminders.** That would drift toward automation, and you decide when to
   write again.
