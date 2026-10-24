@@ -12,6 +12,19 @@
 {% if ctx and ctx.is_placeholder %}
 <div class="notice warn">{{ icon("alert") }}<span>Not filled in yet. Until you save your real background, drafts will be generic.</span></div>
 {% endif %}
+<div class="card import" id="importCard">
+  <div class="import-row">
+    <div class="import-icon">{{ icon("upload") }}</div>
+    <div class="import-text">
+      <h2>Fill from your CV</h2>
+      <p>Drop a PDF, Word file, photo or scan of your CV here. Scans are read with OCR, then the model drafts the fields below. Nothing is saved until you click Save.</p>
+    </div>
+    <label class="btn" for="cvFile" id="cvPick">Choose file</label>
+    <input type="file" id="cvFile" class="sr-only" accept=".pdf,.docx,.txt,.md,image/png,image/jpeg,image/webp,image/tiff">
+  </div>
+  <div class="import-result" id="importResult" hidden></div>
+</div>
+
 {% set real = ctx if ctx and not ctx.is_placeholder else None %}
 {% set hint = ctx if ctx and ctx.is_placeholder else None %}
 <div class="grid2">
@@ -57,7 +70,7 @@
       </div>
     </div>
   </form>
-  <div class="card">
+  <div class="card sticky">
     <div class="card-head">
       <div>
         <h2>What the model sees</h2>
@@ -82,5 +95,104 @@
   };
   form.addEventListener("input", render);
   {% if real %}render();{% endif %}
+
+  // --- CV import: upload, then fill the form for review (nothing is saved here) ---
+  const card = document.getElementById("importCard");
+  const input = document.getElementById("cvFile");
+  const result = document.getElementById("importResult");
+  const fieldNames = Object.keys(labels);
+  const METHOD = { "pdf-text": "from the PDF's text", "pdf-ocr": "with OCR", "image-ocr": "with OCR", docx: "from the Word file", text: "from the text file" };
+  let busy = false;
+
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const iconHtml = (name) => document.querySelector(`#icon-${name}`).innerHTML;
+
+  function show(...nodes) { result.replaceChildren(...nodes); result.hidden = !nodes.length; }
+
+  async function upload(file) {
+    if (busy || !file) return;
+    busy = true;
+    card.setAttribute("aria-busy", "true");
+    const started = Date.now();
+    const status = el("div", "notice", "");
+    status.style.background = "var(--surface-2)"; status.style.color = "var(--text-2)";
+    const msg = el("span");
+    status.append(el("span", "spinner"), msg);
+    const tick = () => { msg.textContent = `Reading ${file.name} and drafting your context… ${Math.round((Date.now() - started) / 1000)}s`; };
+    tick(); show(status);
+    const timer = setInterval(tick, 1000);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const resp = await fetch("/context/import", { method: "POST", body });
+      if (resp.redirected) { location.href = "/login"; return; }
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok) {
+        const d = data && data.detail;
+        throw new Error((d && d.message) || (typeof d === "string" ? d : `Import failed (HTTP ${resp.status}).`));
+      }
+      fill(file.name, data);
+    } catch (e) {
+      const n = el("div", "notice bad");
+      n.innerHTML = iconHtml("alert");
+      n.append(el("span", "", e.message));
+      show(n);
+    } finally {
+      clearInterval(timer);
+      busy = false;
+      card.removeAttribute("aria-busy");
+      input.value = "";
+    }
+  }
+
+  function fill(name, data) {
+    const before = Object.fromEntries(fieldNames.map((k) => [k, form.elements[k].value]));
+    for (const k of fieldNames) {
+      const f = form.elements[k];
+      f.value = data.fields[k] || "";
+      f.classList.remove("filled"); void f.offsetWidth; f.classList.add("filled");
+    }
+    render();
+
+    const ok = el("div", "notice ok");
+    ok.innerHTML = iconHtml("check");
+    const text = el("span");
+    const how = METHOD[data.method] || "";
+    text.append(`Filled from ${name}${how ? ` (read ${how}${data.ocr_pages ? `, ${data.ocr_pages} page${data.ocr_pages > 1 ? "s" : ""}` : ""})` : ""}. Check every field, fix anything wrong, then click `, el("strong", "", "Save"), ".");
+    ok.append(text);
+    const undo = el("button", "sm ghost");
+    undo.type = "button";
+    undo.innerHTML = iconHtml("undo") + " Undo";
+    undo.style.marginLeft = "auto";
+    undo.addEventListener("click", () => {
+      for (const k of fieldNames) form.elements[k].value = before[k];
+      render();
+      show();
+    });
+    ok.append(undo);
+    const nodes = [ok];
+    if (data.warnings.length) {
+      const w = el("div", "notice warn");
+      w.innerHTML = iconHtml("alert");
+      const list = el("ul");
+      data.warnings.forEach((x) => list.append(el("li", "", x)));
+      const span = el("span", "", "Heads up:");
+      span.append(list);
+      w.append(span);
+      nodes.push(w);
+    }
+    const details = el("details");
+    details.append(el("summary", "", `Text read from your CV (${data.text.length} characters)`), el("div", "preview", data.text));
+    nodes.push(details);
+    show(...nodes);
+  }
+
+  input.addEventListener("change", () => upload(input.files[0]));
+  ["dragenter", "dragover"].forEach((t) => card.addEventListener(t, (e) => { e.preventDefault(); card.classList.add("dragover"); }));
+  ["dragleave", "drop"].forEach((t) => card.addEventListener(t, (e) => { e.preventDefault(); if (t === "drop" || !card.contains(e.relatedTarget)) card.classList.remove("dragover"); }));
+  card.addEventListener("drop", (e) => upload(e.dataTransfer.files[0]));
 </script>
+<template id="icon-alert">{{ icon("alert") }}</template>
+<template id="icon-check">{{ icon("check") }}</template>
+<template id="icon-undo">{{ icon("undo") }}</template>
 {% endblock %}

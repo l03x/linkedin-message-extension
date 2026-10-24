@@ -3,11 +3,12 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.auth import LoginRedirect
 from app.config import Settings, check_settings, get_settings
+from app.cv_import import CVImportError
 from app.db import Database
 from app.llm import ChatClient, LLMClient, LLMError
 from app.routers import api, dashboard
@@ -44,6 +45,10 @@ def create_app(settings: Settings | None = None, llm: ChatClient | None = None) 
     async def _llm_error(_: Request, exc: LLMError) -> JSONResponse:
         return JSONResponse({"detail": {"code": exc.code, "message": exc.message}}, status_code=exc.status)
 
+    @app.exception_handler(CVImportError)
+    async def _cv_error(_: Request, exc: CVImportError) -> JSONResponse:
+        return JSONResponse({"detail": {"code": exc.code, "message": exc.message}}, status_code=exc.status)
+
     @app.exception_handler(LoginRedirect)
     async def _login(request: Request, _: LoginRedirect) -> Response:
         if request.headers.get("hx-request"):
@@ -54,6 +59,12 @@ def create_app(settings: Settings | None = None, llm: ChatClient | None = None) 
     app.include_router(api.router)
     app.include_router(dashboard.router)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> FileResponse:
+        # For anything that asks for /favicon.ico directly instead of reading the <link> tags.
+        return FileResponse(STATIC_DIR / "favicon.ico", media_type="image/x-icon")
+
     return app
 
 

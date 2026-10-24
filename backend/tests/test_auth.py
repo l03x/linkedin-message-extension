@@ -71,3 +71,9 @@ def test_cors_preflight_from_extension(client):
 def test_missing_token_refuses_to_start():
     with pytest.raises(RuntimeError, match="APP_TOKEN"):
         create_app(Settings(app_token="change-me", database_url="sqlite://"))
+
+
+def test_favicon_is_public(client):
+    r = client.get("/favicon.ico")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/x-icon"
+    assert client.get("/static/favicon.svg").status_code == 200

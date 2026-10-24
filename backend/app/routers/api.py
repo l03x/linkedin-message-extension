@@ -1,10 +1,11 @@
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app import store
+from app.cv_import import MAX_UPLOAD_BYTES, import_cv
 from app.auth import require_bearer
 from app.config import Settings
 from app.deps import get_db, get_llm, get_settings
@@ -14,6 +15,7 @@ from app.modes import MODES, options_payload
 from app.schemas import (
     ContextIn,
     ContextOut,
+    CVImportOut,
     GenerateRequest,
     GenerateResponse,
     GenerationOut,
@@ -199,3 +201,23 @@ def put_context(body: ContextIn, db: Session = Depends(get_db)):
 @router.get("/context/versions", response_model=list[ContextOut])
 def context_versions(db: Session = Depends(get_db)):
     return store.list_contexts(db)
+
+
+@router.post("/context/import", response_model=CVImportOut)
+def import_context_from_cv(
+    file: UploadFile = File(...),
+    llm: ChatClient = Depends(get_llm),
+    settings: Settings = Depends(get_settings),
+):
+    """Extract a CV's text (OCR for scans) and let the LLM propose context fields. Saves nothing."""
+    return run_cv_import(file, llm, settings)
+
+
+def run_cv_import(file: UploadFile, llm: ChatClient, settings: Settings) -> CVImportOut:
+    # Read one byte past the limit so an oversized upload is detected without reading all of it.
+    data = file.file.read(MAX_UPLOAD_BYTES + 1)
+    result = import_cv(llm, data, file.filename or "", settings.ocr_langs)
+    ex = result.extracted
+    return CVImportOut(
+        fields=ContextIn(**result.fields), text=ex.text, method=ex.method, ocr_pages=ex.ocr_pages, warnings=ex.warnings
+    )

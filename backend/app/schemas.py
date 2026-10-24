@@ -127,3 +127,11 @@ class ContextOut(ContextIn):
     id: int
     is_placeholder: bool
     created_at: datetime
+
+
+class CVImportOut(BaseModel):
+    fields: ContextIn
+    text: str
+    method: str
+    ocr_pages: int
+    warnings: list[str]

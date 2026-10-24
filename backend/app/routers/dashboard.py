@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import case, func, select
@@ -12,10 +12,12 @@ from sqlalchemy.orm import Session
 from app import stats, store
 from app.auth import COOKIE_NAME, cookie_value, require_dashboard, token_matches
 from app.config import Settings
-from app.deps import get_db, get_settings
+from app.deps import get_db, get_llm, get_settings
+from app.llm import ChatClient
 from app.modes import LANGUAGES, MODES
 from app.models import SENT_STATUSES, STATUSES, Generation, utcnow
-from app.routers.api import history_filters
+from app.routers.api import history_filters, run_cv_import
+from app.schemas import CVImportOut
 
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 STATUS_LABELS = {"drafted": "Draft", "sent": "Awaiting reply", "replied": "Replied", "no_reply": "No reply"}
@@ -196,6 +198,16 @@ def context_save(
         notes=notes,
     )
     return RedirectResponse("/context?saved=1", status_code=303)
+
+
+@router.post("/context/import", dependencies=auth, response_model=CVImportOut)
+def context_import(
+    file: UploadFile = File(...),
+    llm: ChatClient = Depends(get_llm),
+    settings: Settings = Depends(get_settings),
+):
+    # Same as POST /api/context/import, behind the dashboard cookie. Returns JSON; the page fills the form.
+    return run_cv_import(file, llm, settings)
 
 
 # --- history -------------------------------------------------------------------------------

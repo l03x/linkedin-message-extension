@@ -122,7 +122,16 @@ OS setting.
   - Exactly one version is active. You can activate any version, or start editing from any version.
   - Diff any two versions.
 - **My context:** your background and targets: role, stack, dates, location and notes. Each save is a new
-  timestamped version.
+  timestamped version. The "What the model sees" preview scrolls on its own when the context is long.
+  - **Fill from your CV:** drop a PDF, DOCX, TXT or image (PNG/JPG, e.g. a phone photo) on the import card.
+    The backend reads the text, then asks the LLM to turn it into the context fields, and the form is
+    pre-filled for you to review. **Nothing is saved until you click Save**, and Undo puts the previous
+    values back.
+    - A PDF with a text layer is read directly. A scanned PDF (almost no text layer) is rendered page by
+      page and OCR'd with Tesseract, up to the first 5 pages. Images are OCR'd directly.
+    - OCR languages come from `OCR_LANGS` (default `eng+fra`; `ara` is also installed).
+    - The extracted text is shown under the result so you can see what the LLM worked from.
+    - Old `.doc` files aren't supported: save as `.docx` or PDF first.
 - **History:**
   - Filter by mode, language, status, prompt version and date range. Unsent drafts are hidden unless you
     ask for them.
@@ -236,5 +245,15 @@ docker compose cp backend:/data/app.db ./app-backup.db
 - **Times are stored as naive UTC.** Days and weeks are bucketed in `TIMEZONE`. Weeks start on Monday.
 - **The theme is a per-browser preference** stored in localStorage, not on the server. Light and dark are
   one set of color tokens redefined, and the charts redraw from those tokens when you switch.
+- **CV import pre-fills the form and never saves.** The LLM can misread a CV, and your context feeds every
+  draft, so you check it first. The upload is processed in memory and not stored. Only the context you
+  save is kept.
+- **The CV prompt extracts, it doesn't write.** It asks for facts from the CV only, in the CV's language,
+  and leaves out contact details (email, phone, address), which have no place in a message draft. The CV
+  text is treated as data, like profile text.
+- **OCR is Tesseract + pdftoppm (poppler) as CLI tools**, not PyMuPDF or a cloud OCR. They are Debian
+  packages (no AGPL wheel, nothing leaves your machine), and the CLI avoids extra Python bindings. A PDF
+  is OCR'd only when its text layer is under 200 characters, and only the first 5 pages, since a CV
+  rarely runs longer and OCR takes a few seconds per page.
 - **No automatic follow-ups or reminders.** That would drift toward automation, and you decide when to
   write again.

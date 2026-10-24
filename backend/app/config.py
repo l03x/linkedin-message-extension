@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     llm_effort: str = ""
     llm_timeout_seconds: float = 180.0
 
+    # Tesseract languages for OCR of scanned CVs ("+"-separated). eng, fra and ara are installed in the image.
+    ocr_langs: str = "eng+fra"
+
     # Set to true when the dashboard is served over HTTPS.
     cookie_secure: bool = False
 

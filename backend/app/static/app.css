@@ -333,7 +333,43 @@ details.menu > summary::-webkit-details-marker { display: none; }
 .diff-pick .field { flex: 1; min-width: 180px; }
 
 /* ---------- context preview ---------- */
-.preview { white-space: pre-wrap; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text-2); background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px 14px; border: 1px solid var(--border); }
+.preview {
+  white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-2); background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px 14px;
+  border: 1px solid var(--border);
+  /* Long backgrounds scroll inside the box instead of stretching the page. */
+  max-height: calc(100vh - 230px); min-height: 120px; overflow-y: auto; overscroll-behavior: contain;
+}
+.sticky { position: sticky; top: 76px; }
+@media (max-width: 900px) {
+  .sticky { position: static; }
+  .preview { max-height: 360px; }
+}
+
+/* ---------- CV import ---------- */
+.import { border-style: dashed; border-width: 1.5px; transition: border-color .12s, background .12s; margin-bottom: 16px; }
+.import.dragover { border-color: var(--accent); background: var(--accent-soft); }
+.import-row { display: flex; align-items: center; gap: 16px; padding: 16px 20px; flex-wrap: wrap; }
+.import-icon {
+  width: 40px; height: 40px; border-radius: 10px; flex: none; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.import-icon .icon { width: 20px; height: 20px; }
+.import-text { flex: 1; min-width: 240px; }
+.import-text p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.import-result { padding: 0 20px 16px; }
+.import-result .notice { margin-bottom: 10px; }
+.import-result .notice ul { margin: 4px 0 0; padding-left: 18px; }
+.import-result details summary { cursor: pointer; color: var(--text-2); font-size: 13px; font-weight: 550; }
+.import-result details .preview { margin-top: 8px; max-height: 320px; }
+.spinner {
+  display: inline-block; width: 14px; height: 14px; flex: none; margin-top: 2px;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes filled { from { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); border-color: var(--accent); } }
+.filled { animation: filled 1.6s ease-out; }
 
 /* ---------- stats ---------- */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
