@@ -41,5 +41,5 @@ def check_settings(settings: Settings) -> None:
     if settings.app_token.strip() in PLACEHOLDER_TOKENS:
         raise RuntimeError(
             "APP_TOKEN is not set. Put a long random value in .env, e.g. the output of:\n"
-            "  python3 -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            "  openssl rand -hex 32"
         )
