@@ -28,13 +28,13 @@ cp .env.example .env
 
 Open `.env` and set these values:
 
-| Variable | What to put |
-|---|---|
-| `APP_TOKEN` | A long random string. It is your password for the dashboard and the extension. |
-| `LLM_BASE_URL` | Your LLM API, ending in `/v1`. |
-| `LLM_API_KEY` | The API key for that LLM. |
-| `LLM_MODEL` | The model name, for example `sonnet`. |
-| `TIMEZONE` | Your timezone, for example `Europe/Paris`. The stats use it. |
+| Variable       | What to put                                                                    |
+| -------------- | ------------------------------------------------------------------------------ |
+| `APP_TOKEN`    | A long random string. It is your password for the dashboard and the extension. |
+| `LLM_BASE_URL` | Your LLM API, ending in `/v1`.                                                 |
+| `LLM_API_KEY`  | The API key for that LLM.                                                      |
+| `LLM_MODEL`    | The model name, for example `sonnet`.                                          |
+| `TIMEZONE`     | Your timezone, for example `Europe/Paris`. The stats use it.                   |
 
 To generate a token:
 
@@ -50,8 +50,18 @@ The other variables are optional. `.env.example` explains each one.
 
 ## Step 2: Start the backend
 
+### Docker
+
 ```bash
 docker compose up -d --build
+```
+
+### K8s
+
+```bash
+kubectl create namespace linkedin-outreach
+kubectl -n linkedin-outreach create secret generic backend-env --from-env-file=.env
+kubectl apply -f linkedin-outreach.yaml
 ```
 
 This runs one container and keeps its database on a Docker volume called `data`. Open
@@ -90,14 +100,15 @@ The **What the model sees** box shows exactly what is sent with every draft.
 2. In the side panel, choose:
    - **Message type**:
 
-     | Type | When to use it | Limit |
-     |---|---|---|
-     | Connection note | With a connection request | 300 characters |
-     | Message | You're already connected | about 600 characters |
-     | InMail | Premium message to someone outside your network | subject 200, body 1900 |
+     | Type            | When to use it                                  | Limit                  |
+     | --------------- | ----------------------------------------------- | ---------------------- |
+     | Connection note | With a connection request                       | 300 characters         |
+     | Message         | You're already connected                        | about 600 characters   |
+     | InMail          | Premium message to someone outside your network | subject 200, body 1900 |
 
    - **Language**: English, French or Arabic.
    - **Extra instruction** (optional), for example "mention that I'm available from June".
+
 3. Click **Generate draft**. The button shows two steps:
    - **Researching…**: a web search about the person's company. It takes 30 to 90 seconds the first time,
      and is instant for a company you've already researched.
