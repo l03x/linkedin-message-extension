@@ -21,11 +21,12 @@
   </form>
 </div>
 
+{% if cached %}<div class="notice ok">{{ icon("check") }}<span>{% if c.manually_edited %}Already here with research you edited, so it wasn't searched again.{% else %}Already researched{% if c.age_days %} {{ c.age_days }} day{{ 's' if c.age_days != 1 }} ago{% else %} today{% endif %} and still fresh, so it wasn't searched again. Use Refresh research to search now.{% endif %}</span></div>{% endif %}
 {% if saved %}<div class="notice ok">{{ icon("check") }}<span>Saved. Drafts use your version from now on, and it is never refreshed automatically.</span></div>{% endif %}
 {% if refresh %}
   {% if refresh.error %}<div class="notice bad">{{ icon("alert") }}<span>Research failed: {{ refresh.error }}</span></div>
   {% elif refresh.notice %}<div class="notice warn">{{ icon("info") }}<span>{{ refresh.notice }}</span></div>
-  {% elif refresh.researched %}<div class="notice ok">{{ icon("check") }}<span>Researched again: {{ c.facts|length }} sourced facts.</span></div>{% endif %}
+  {% elif refresh.researched %}<div class="notice ok">{{ icon("check") }}<span>Researched: {{ c.facts|length }} sourced facts.</span></div>{% endif %}
 {% endif %}
 {% if c.status == "failed" and c.last_error and not (refresh and refresh.error) %}
 <div class="notice warn">{{ icon("alert") }}<span>Last research failed: {{ c.last_error }}{% if c.next_retry_at %} It is tried again after {{ local(c.next_retry_at, '%d %b %H:%M') }}, or when you refresh.{% endif %}</span></div>

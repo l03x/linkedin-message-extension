@@ -1,6 +1,7 @@
 import difflib
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app import research, stats, store
 from app.auth import COOKIE_NAME, cookie_value, require_dashboard, token_matches
+from app.company import find_or_create, identify
 from app.config import Settings
 from app.deps import get_db, get_llm, get_settings
 from app.llm import EFFORTS, ChatClient
@@ -362,10 +364,52 @@ def _company_usage(db: Session) -> dict[int, dict]:
     return {cid: {"drafts": n, "sent": s or 0} for cid, n, s in db.execute(q)}
 
 
+def _companies_page(request: Request, db: Session, settings: Settings, status_code: int = 200, **ctx) -> HTMLResponse:
+    rows = [company_out(db, c, settings) for c in store.list_companies(db)]
+    return _render(request, "companies.html", status_code, rows=rows, usage=_company_usage(db), **_ttl_ctx(db, settings), **ctx)
+
+
 @router.get("/companies", dependencies=auth)
 def companies_page(request: Request, saved: bool = False, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
-    rows = [company_out(db, c, settings) for c in store.list_companies(db)]
-    return _render(request, "companies.html", rows=rows, usage=_company_usage(db), saved=saved, **_ttl_ctx(db, settings))
+    return _companies_page(request, db, settings, saved=saved)
+
+
+def _website(value: str) -> tuple[str | None, str | None]:
+    """(URL, problem) for the optional website typed next to a company name. A bare domain gets https://."""
+    value = value.strip()
+    if not value:
+        return None, None
+    url = research.http_url(value if "://" in value else f"https://{value}")
+    if url is None or "." not in (urlsplit(url).hostname or ""):
+        return None, "The website must be a domain or an http(s) URL, like acme.com."
+    if research.blocked(url):
+        return None, "Use the company's own website, not its LinkedIn page."
+    return url, None
+
+
+@router.post("/companies/research", dependencies=auth)
+def companies_research(
+    request: Request,
+    name: str = Form(""),
+    website: str = Form(""),
+    db: Session = Depends(get_db),
+    llm: ChatClient = Depends(get_llm),
+    settings: Settings = Depends(get_settings),
+):
+    """Research a company you name, without a profile. Cached research is reused; anything else is searched now."""
+    ref = identify("", "", override=name)
+    url, problem = _website(website)
+    if ref is None or problem:
+        problem = problem or "Type a company name (not “Freelance”, “Student” or the like)."
+        return _companies_page(request, db, settings, 422, add_error=problem, add_name=name, add_website=website)
+    company = find_or_create(db, ref)
+    if url and not company.manually_edited:
+        company.website = url
+    db.commit()
+    if research.is_fresh(company, research.ttl(db, settings.research_ttl_days)):  # also true for research you edited
+        return _company_page(request, db, settings, company, cached=True)
+    result = run_refresh(db, llm, settings, company, discard_edits=False)
+    return _company_page(request, db, settings, db.get(Company, company.id), refresh=result)
 
 
 @router.post("/settings/research-ttl", dependencies=auth)

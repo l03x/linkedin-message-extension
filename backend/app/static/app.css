@@ -402,6 +402,9 @@ main > .grid-half + .grid-half, main > .legend-note + .card, main > .card + .leg
 a.chip:hover { text-decoration: none; background: var(--hover); }
 .chip.strategy { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .ttl-row { display: flex; align-items: center; gap: 8px; }
+.add-title { margin-bottom: 14px; }
+.add-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.add-row .hint { flex: 1; min-width: 220px; }
 .ttl-row input[type=number] {
   width: 96px; padding: 7px 10px; font: inherit; color: var(--text); background: var(--surface);
   border: 1px solid var(--border-strong); border-radius: var(--radius-sm);

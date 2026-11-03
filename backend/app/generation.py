@@ -229,7 +229,8 @@ def company_hints(profile: ProfileInput) -> str:
 
 
 def stored_hints(db: Session, company: Company) -> str:
-    """Hints for re-researching a company outside a generation: the headline of the last profile drafted for it."""
+    """Hints for re-researching a company outside a generation: its website and the headline of the last profile
+    drafted for it."""
     from app.models import Profile
 
     headline = db.scalar(
@@ -240,7 +241,8 @@ def stored_hints(db: Session, company: Company) -> str:
         .limit(1)
     )
     hint = ProfileInput(url="", name="", headline=headline or "", raw_text="", company_hint={"linkedin_slug": company.linkedin_slug})
-    return company_hints(hint)
+    hints = company_hints(hint)
+    return "\n".join(filter(None, [f"Its website: {company.website}" if company.website else "", hints]))
 
 
 def resolve_company(db: Session, profile: ProfileInput, override: str = "") -> Company | None:

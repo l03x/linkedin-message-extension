@@ -16,6 +16,27 @@
 {% if saved %}<div class="notice ok">{{ icon("check") }}<span>Saved. The new expiry applies from the next draft.</span></div>{% endif %}
 
 <div class="card">
+  <form class="card-body" method="post" action="/companies/research" id="addForm">
+    <h2 class="add-title">Research a company</h2>
+    {% if add_error %}<div class="notice bad">{{ icon("alert") }}<span>{{ add_error }}</span></div>{% endif %}
+    <div class="field-grid">
+      <div class="field">
+        <label for="add_name">Company name</label>
+        <input id="add_name" name="name" type="text" maxlength="300" required value="{{ add_name or '' }}" placeholder="Acme" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="add_website">Website <span class="muted">(optional)</span></label>
+        <input id="add_website" name="website" type="text" maxlength="300" value="{{ add_website or '' }}" placeholder="acme.com" autocomplete="off">
+      </div>
+    </div>
+    <div class="add-row">
+      <button class="primary" type="submit" id="addBtn"><span class="spinner" hidden></span><span class="btn-label">Research</span></button>
+      <span class="hint">Searches the web and caches the result, like research for a draft. A company that is already cached and fresh opens without a new search. The website helps when several companies share the name.</span>
+    </div>
+  </form>
+</div>
+
+<div class="card">
   <form class="card-body ttl-form" method="post" action="/settings/research-ttl">
     <div class="field">
       <label for="days">Research expires after</label>
@@ -71,11 +92,20 @@
   {% else %}
   <div class="empty">
     <h2>No companies yet</h2>
-    <p>A company appears here the first time you generate a draft for someone who works there.</p>
+    <p>A company appears here the first time you generate a draft for someone who works there, or when you research it above.</p>
   </div>
   {% endif %}
 </div>
 <script>
+  document.getElementById("addForm").addEventListener("submit", () => {
+    const btn = document.getElementById("addBtn");
+    btn.disabled = true;
+    btn.querySelector(".spinner").hidden = false;
+    const started = Date.now();
+    const tick = () => (btn.querySelector(".btn-label").textContent = `Searching the web… ${Math.round((Date.now() - started) / 1000)}s`);
+    tick();
+    setInterval(tick, 1000);
+  });
   const setOpen = (btn, open) => {
     btn.setAttribute("aria-expanded", String(open));
     document.getElementById(btn.dataset.toggle).hidden = !open;
